@@ -1,0 +1,52 @@
+# TRADER.AI — Guía Rápida
+
+## Tus archivos están en:
+C:\Users\ingri\Documents\Proyecto-UMG\HotelLosVolcanes_Completo\TRADER_AI\
+
+## Pasos para activar el agente
+
+### 1. Instalar (solo la primera vez)
+Doble clic en: **1_INSTALAR.bat**
+- Instala Python si no lo tienes
+- Instala todas las librerías automáticamente
+- Abre config.json para que pongas tu API Key
+
+### 2. Obtener API Key de Anthropic (GRATIS para empezar)
+1. Ve a: https://console.anthropic.com
+2. Crea cuenta → ve a "API Keys" → "Create Key"
+3. Copia la clave (empieza con sk-ant-...)
+4. Pégala en config.json donde dice PEGA_AQUI_TU_API_KEY
+
+### 3. Iniciar el agente
+Doble clic en: **2_INICIAR.bat**
+
+### 4. Usar
+- Abre tu broker (Binance, TradingView, MetaTrader, etc.)
+- Presiona **Ctrl+Shift+A** → el agente analiza tu pantalla
+- El dashboard se abre automáticamente en tu navegador
+- Usa el chat del tutor para preguntar lo que quieras
+
+## Atajos de teclado
+- Ctrl+Shift+A = Analizar pantalla ahora
+- Ctrl+Shift+S = Detener el agente
+
+## Plataformas compatibles
+Binance, TradingView, MetaTrader 4/5, Bybit, Coinbase, eToro,
+Interactive Brokers, y CUALQUIER otra que tenga gráficas.
+
+## Alertas en Telegram (opcional)
+Para recibir señales en tu teléfono:
+1. Abre Telegram → busca @BotFather → /newbot
+2. Copia el token y ponlo en config.json (telegram_bot_token)
+3. Busca @userinfobot para tu chat_id
+
+## Archivos del sistema
+- mcp_server.py    → Motor del agente IA
+- dashboard.html   → Panel visual en tu navegador
+- config.json      → Tu configuración
+- 1_INSTALAR.bat   → Instalador (ejecutar 1 vez)
+- 2_INICIAR.bat    → Iniciar el agente
+- trading_history.json → Se crea solo con tu historial
+
+AVISO: Este sistema es educativo. Siempre invierte
+con responsabilidad y nunca más de lo que puedas perder.
