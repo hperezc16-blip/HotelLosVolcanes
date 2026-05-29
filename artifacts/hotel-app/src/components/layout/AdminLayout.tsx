@@ -82,7 +82,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-card border-b flex items-center justify-between px-6 shrink-0 sticky top-0 z-10">
-          <h2 className="font-medium text-lg">Hotel Los Volcanes</h2>
+          <div>
+            <h2 className="font-medium text-lg">Hotel Los Volcanes</h2>
+            <p className="text-xs text-muted-foreground hidden md:block">
+              {new Date().toLocaleDateString("es-GT", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            </p>
+          </div>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
