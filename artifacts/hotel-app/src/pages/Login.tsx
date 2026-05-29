@@ -102,7 +102,13 @@ export default function Login() {
           </Button>
         </form>
 
-        <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
+        <div className="mt-4 text-center">
+          <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+            ¿Olvidó su contraseña?
+          </Link>
+        </div>
+
+        <div className="mt-6 pt-6 border-t text-center text-sm text-muted-foreground">
           ¿No tiene una cuenta?{" "}
           <Link href="/register" className="text-primary hover:underline font-medium">
             Regístrese aquí

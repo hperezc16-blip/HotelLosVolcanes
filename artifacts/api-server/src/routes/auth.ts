@@ -7,6 +7,9 @@ import { requireAuth, signToken, type AuthRequest } from "../middlewares/auth.js
 
 const router: Router = Router();
 
+// In-memory store for password reset tokens (demo mode)
+const resetTokens = new Map<string, { email: string; expiry: Date }>();
+
 router.post("/auth/register", async (req, res) => {
   const { nombre, email, password, telefono } = req.body;
   if (!nombre || !email || !password) {
@@ -113,6 +116,44 @@ router.patch("/auth/profile", requireAuth, async (req: AuthRequest, res) => {
   const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, user.id)).returning();
   const { passwordHash: _, ...publicUser } = updated;
   res.json(publicUser);
+});
+
+router.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body as { email?: string };
+  if (!email) { res.status(400).json({ error: "Bad Request", message: "email es requerido" }); return; }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+
+  const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+  if (user) {
+    resetTokens.set(token, { email: user.email, expiry: new Date(Date.now() + 3_600_000) });
+  }
+
+  res.json({
+    message: "Si el correo existe en nuestro sistema, recibirá instrucciones.",
+    ...(user ? { token, note: "Modo demo: en producción este token se enviaría por correo" } : {}),
+  });
+});
+
+router.post("/auth/reset-password", async (req, res) => {
+  const { token, nuevaPassword } = req.body as { token?: string; nuevaPassword?: string };
+  if (!token || !nuevaPassword) {
+    res.status(400).json({ error: "Bad Request", message: "token y nuevaPassword son requeridos" }); return;
+  }
+  if (nuevaPassword.length < 8) {
+    res.status(400).json({ error: "Bad Request", message: "La contraseña debe tener al menos 8 caracteres" }); return;
+  }
+
+  const entry = resetTokens.get(token);
+  if (!entry || entry.expiry < new Date()) {
+    res.status(400).json({ error: "Bad Request", message: "Token inválido o expirado" }); return;
+  }
+
+  const passwordHash = await bcrypt.hash(nuevaPassword, 12);
+  await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.email, entry.email));
+  resetTokens.delete(token);
+
+  res.json({ message: "Contraseña actualizada correctamente" });
 });
 
 export default router;

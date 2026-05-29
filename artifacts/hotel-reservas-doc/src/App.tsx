@@ -8,6 +8,7 @@ import UIUXPage from "@/pages/UIUXPage";
 import ScrumPage from "@/pages/ScrumPage";
 import DevOpsPage from "@/pages/DevOpsPage";
 import AzureGuiePage from "@/pages/AzureGuiePage";
+import BitacoraPage from "@/pages/BitacoraPage";
 
 const sections = [
   { id: "portada", label: "Portada", icon: "🏨", shortLabel: "Portada" },
@@ -19,6 +20,7 @@ const sections = [
   { id: "uiux", label: "4.5 UI/UX", icon: "🎨", shortLabel: "UI/UX" },
   { id: "scrum", label: "4.6 Scrum", icon: "⚡", shortLabel: "Scrum" },
   { id: "devops", label: "4.6.3 DevOps CI/CD", icon: "🔄", shortLabel: "DevOps" },
+  { id: "bitacora", label: "Bitácora Técnica", icon: "📓", shortLabel: "Bitácora" },
 ];
 
 function CoverPage() {
@@ -70,7 +72,7 @@ function CoverPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl w-full">
         {[
-          { num: "8", label: "Entregables", color: "bg-blue-50 border-blue-200 text-blue-700" },
+          { num: "9", label: "Entregables", color: "bg-blue-50 border-blue-200 text-blue-700" },
           { num: "15", label: "Historias de Usuario", color: "bg-green-50 border-green-200 text-green-700" },
           { num: "5", label: "Épicas", color: "bg-orange-50 border-orange-200 text-orange-700" },
           { num: "110", label: "Story Points", color: "bg-purple-50 border-purple-200 text-purple-700" },
@@ -94,6 +96,7 @@ function CoverPage() {
             { num: "4.5", name: "Diseño UI/UX — Wireframes y Flujos", pts: "3.0 pts" },
             { num: "4.6", name: "Planificación Scrum (DoR, DoD, Sprints)", pts: "0.5 pts" },
             { num: "4.6.3", name: "Estrategia DevOps (Branching + CI/CD)", pts: "2.0 pts" },
+            { num: "BIT", name: "Bitácora Técnica de Desarrollo", pts: "Extra" },
           ].map((item) => (
             <div key={item.num} className="flex items-center justify-between bg-card border border-border rounded-lg px-4 py-2">
               <div className="flex items-center gap-2">
@@ -150,6 +153,10 @@ function PrintAllPages() {
         <h2 className="text-2xl font-bold mb-6 pb-3 border-b border-border">4.6.3 Estrategia de DevOps</h2>
         <DevOpsPage />
       </div>
+      <div className="print-page print-break">
+        <h2 className="text-2xl font-bold mb-6 pb-3 border-b border-border">Bitácora Técnica de Desarrollo</h2>
+        <BitacoraPage />
+      </div>
     </div>
   );
 }
@@ -178,6 +185,7 @@ export default function App() {
       case "uiux": return <UIUXPage />;
       case "scrum": return <ScrumPage />;
       case "devops": return <DevOpsPage />;
+      case "bitacora": return <BitacoraPage />;
       default: return <CoverPage />;
     }
   };

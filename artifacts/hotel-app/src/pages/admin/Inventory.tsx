@@ -1,44 +1,50 @@
 import { useEffect, useState } from "react";
 import { axiosInstance } from "@/lib/axios-client";
 import { useToast } from "@/hooks/use-toast";
-import { Bed, CheckCircle, Clock, Wrench, Sparkles, Users } from "lucide-react";
+import { Bed, CheckCircle, Wrench, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type RoomInv = { id: string; nombre: string; tipo: string; precioNoche: string; capacidad: number; estadoOcupacion: string; amenidades?: string | null };
+type RoomInv = { id: string; nombre: string; tipo: string; precioNoche: string; capacidad: number; estadoOcupacion: string; estadoManual?: string | null; amenidades?: string | null };
 type InventoryData = { inventory: RoomInv[]; todayArrivals: number; todayDepartures: number };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; bg: string }> = {
-  disponible: { label: "Disponible", color: "text-green-700", bg: "bg-green-50 border-green-200", icon: CheckCircle },
-  ocupada:    { label: "Ocupada",    color: "text-red-700",   bg: "bg-red-50 border-red-200",     icon: Bed },
-  limpieza:   { label: "En Limpieza", color: "text-blue-700", bg: "bg-blue-50 border-blue-200",   icon: Sparkles },
-  mantenimiento: { label: "Mantenimiento", color: "text-amber-700", bg: "bg-amber-50 border-amber-200", icon: Wrench },
+  disponible:    { label: "Disponible",     color: "text-green-700", bg: "bg-green-50 border-green-200",   icon: CheckCircle },
+  ocupada:       { label: "Ocupada",        color: "text-red-700",   bg: "bg-red-50 border-red-200",       icon: Bed },
+  limpieza:      { label: "En Limpieza",    color: "text-blue-700",  bg: "bg-blue-50 border-blue-200",     icon: Sparkles },
+  mantenimiento: { label: "Mantenimiento",  color: "text-amber-700", bg: "bg-amber-50 border-amber-200",   icon: Wrench },
 };
 const TIPO_LABEL: Record<string, string> = { sencilla: "Sencilla", doble: "Doble", suite: "Suite", cabana: "Cabaña" };
 const TIPO_COLOR: Record<string, string> = { sencilla: "bg-blue-100 text-blue-700", doble: "bg-purple-100 text-purple-700", suite: "bg-amber-100 text-amber-700", cabana: "bg-green-100 text-green-700" };
 
 export default function Inventory() {
   const [data, setData] = useState<InventoryData | null>(null);
-  const [manualStatus, setManualStatus] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState<string | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
+  const load = () => {
     axiosInstance.get("/admin/inventory")
       .then(r => { setData(r.data); setLoading(false); })
       .catch(() => setLoading(false));
-    const saved = localStorage.getItem("room_status_overrides");
-    if (saved) setManualStatus(JSON.parse(saved));
-  }, []);
+  };
 
-  const setRoomStatus = (roomId: string, status: string) => {
-    const updated = { ...manualStatus, [roomId]: status };
-    setManualStatus(updated);
-    localStorage.setItem("room_status_overrides", JSON.stringify(updated));
-    toast({ title: `Estado actualizado: ${STATUS_CONFIG[status]?.label}` });
+  useEffect(() => { load(); }, []);
+
+  const setRoomStatus = async (roomId: string, status: string | null) => {
+    setUpdating(roomId);
+    try {
+      await axiosInstance.patch(`/admin/rooms/${roomId}/status`, { estadoManual: status });
+      toast({ title: `Estado actualizado: ${status ? STATUS_CONFIG[status]?.label : "Disponible"}` });
+      load();
+    } catch {
+      toast({ variant: "destructive", title: "No se pudo actualizar el estado" });
+    } finally {
+      setUpdating(null);
+    }
   };
 
   const getEffectiveStatus = (room: RoomInv) => {
-    if (manualStatus[room.id] && manualStatus[room.id] !== "disponible") return manualStatus[room.id];
+    if (room.estadoManual && room.estadoManual !== "disponible") return room.estadoManual;
     return room.estadoOcupacion;
   };
 
@@ -52,7 +58,7 @@ export default function Inventory() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-serif font-bold text-foreground">Inventario de Habitaciones</h1>
-        <p className="text-muted-foreground mt-1">Estado actual de cada habitación en tiempo real</p>
+        <p className="text-muted-foreground mt-1">Estado actual de cada habitación — cambios guardados en base de datos</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -82,6 +88,7 @@ export default function Inventory() {
           const status = getEffectiveStatus(room);
           const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.disponible;
           const Icon = cfg.icon;
+          const isUpdating = updating === room.id;
           return (
             <div key={room.id} className={`bg-card border-2 rounded-lg p-4 shadow-sm ${cfg.bg}`}>
               <div className="flex items-start justify-between mb-3">
@@ -107,14 +114,18 @@ export default function Inventory() {
 
               {status !== "ocupada" && (
                 <div className="flex flex-wrap gap-1 mt-2">
-                  {Object.entries(STATUS_CONFIG).filter(([k]) => k !== "ocupada" && k !== status).map(([k, c]) => (
-                    <Button key={k} size="sm" variant="outline" onClick={() => setRoomStatus(room.id, k)}
-                      className="h-6 px-2 text-xs">
-                      {c.label}
-                    </Button>
-                  ))}
-                  {manualStatus[room.id] && manualStatus[room.id] !== "disponible" && (
-                    <Button size="sm" variant="outline" onClick={() => setRoomStatus(room.id, "disponible")}
+                  {Object.entries(STATUS_CONFIG)
+                    .filter(([k]) => k !== "ocupada" && k !== status)
+                    .map(([k, c]) => (
+                      <Button key={k} size="sm" variant="outline" disabled={isUpdating}
+                        onClick={() => setRoomStatus(room.id, k === "disponible" ? null : k)}
+                        className="h-6 px-2 text-xs">
+                        {c.label}
+                      </Button>
+                    ))}
+                  {room.estadoManual && room.estadoManual !== "disponible" && (
+                    <Button size="sm" variant="outline" disabled={isUpdating}
+                      onClick={() => setRoomStatus(room.id, null)}
                       className="h-6 px-2 text-xs text-green-700 border-green-300">
                       ✓ Disponible
                     </Button>

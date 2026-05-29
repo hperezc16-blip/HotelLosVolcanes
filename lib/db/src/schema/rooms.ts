@@ -13,6 +13,7 @@ export const roomsTable = pgTable("rooms", {
   capacidad: smallint("capacidad").notNull().default(2),
   imageUrl: varchar("image_url", { length: 500 }),
   amenidades: text("amenidades"),
+  estadoManual: varchar("estado_manual", { length: 20 }),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

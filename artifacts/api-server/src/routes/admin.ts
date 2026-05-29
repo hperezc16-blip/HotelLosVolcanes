@@ -172,6 +172,17 @@ router.get("/admin/reports", requireAdmin, async (_req, res) => {
   res.json({ ingresosMensuales, porTipoHabitacion, pagadas, pendientesPago, canceladas, totalIngresos });
 });
 
+router.patch("/admin/rooms/:id/status", requireAdmin, async (req: AuthRequest, res) => {
+  const id = req.params.id as string;
+  const { estadoManual } = req.body as { estadoManual: string | null };
+  const [updated] = await db.update(roomsTable)
+    .set({ estadoManual: estadoManual || null })
+    .where(eq(roomsTable.id, id))
+    .returning();
+  if (!updated) { res.status(404).json({ error: "Not Found" }); return; }
+  res.json(updated);
+});
+
 router.get("/admin/inventory", requireAdmin, async (_req, res) => {
   const today = new Date().toISOString().split("T")[0];
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.activo, true));

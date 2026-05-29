@@ -16,6 +16,8 @@ import Profile from "./pages/Profile";
 import Services from "./pages/Services";
 import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/admin/Dashboard";
 import AdminRooms from "./pages/admin/Rooms";
 import AdminReservations from "./pages/admin/Reservations";
@@ -63,6 +65,8 @@ function Router() {
             <Route path="/services" component={Services} />
             <Route path="/gallery" component={Gallery} />
             <Route path="/contact" component={Contact} />
+            <Route path="/forgot-password" component={ForgotPassword} />
+            <Route path="/reset-password" component={ResetPassword} />
             <Route component={NotFound} />
           </Switch>
         </MainLayout>
