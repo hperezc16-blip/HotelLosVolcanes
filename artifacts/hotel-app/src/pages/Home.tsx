@@ -214,6 +214,9 @@ export default function Home() {
                       <div className="absolute top-3 left-3 bg-primary text-white text-xs font-semibold uppercase tracking-wider px-3 py-1">
                         {getRoomTypeLabel(room.tipo)}
                       </div>
+                      <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full">
+                        Disponible
+                      </div>
                     </div>
                     <div className="p-5">
                       <h3 className="font-serif text-xl font-semibold mb-1 text-foreground">{room.nombre}</h3>
