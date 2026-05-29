@@ -9,7 +9,7 @@ import { User, Mail, Phone, Lock, Save, CalendarCheck } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [saving, setSaving] = useState(false);
@@ -22,7 +22,8 @@ export default function Profile() {
     if (!form.nombre.trim()) { toast({ variant: "destructive", title: "El nombre es requerido" }); return; }
     setSaving(true);
     try {
-      await axiosInstance.patch("/auth/profile", { nombre: form.nombre, telefono: form.telefono });
+      const { data } = await axiosInstance.patch("/auth/profile", { nombre: form.nombre, telefono: form.telefono });
+      updateUser(data);
       toast({ title: "Perfil actualizado correctamente" });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.response?.data?.message || "No se pudo actualizar" });
