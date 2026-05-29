@@ -161,4 +161,41 @@ router.patch("/reservations/:id", requireAuth, async (req: AuthRequest, res) => 
   }
 });
 
+router.post("/reservations/:id/pay", requireAuth, async (req: AuthRequest, res) => {
+  const id = req.params.id as string;
+  const [reservation] = await db.select().from(reservationsTable).where(eq(reservationsTable.id, id)).limit(1);
+
+  if (!reservation) {
+    res.status(404).json({ error: "Not Found", message: "Reserva no encontrada" });
+    return;
+  }
+  if (req.user!.rol !== "admin" && reservation.clienteId !== req.user!.id) {
+    res.status(403).json({ error: "Forbidden", message: "No autorizado" });
+    return;
+  }
+  if (reservation.estadoPago === "pagado") {
+    res.status(400).json({ error: "Bad Request", message: "La reserva ya está pagada" });
+    return;
+  }
+
+  const { metodoPago = "tarjeta" } = req.body as { metodoPago?: string };
+  const codigoAutorizacion = Math.random().toString(36).substring(2, 10).toUpperCase();
+  const numeroFactura = `FV-${Date.now().toString().slice(-8)}`;
+
+  const [updated] = await db.update(reservationsTable)
+    .set({ estadoPago: "pagado" })
+    .where(eq(reservationsTable.id, id))
+    .returning();
+
+  const enriched = await enrichReservation(updated);
+  res.json({
+    ...enriched,
+    codigoAutorizacion,
+    numeroFactura,
+    metodoPago,
+    fechaPago: new Date().toISOString(),
+    facturaEmail: true,
+  });
+});
+
 export default router;

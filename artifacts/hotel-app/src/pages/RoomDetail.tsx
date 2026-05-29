@@ -2,14 +2,16 @@ import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useGetRoom, useCreateReservation, getGetRoomQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { axiosInstance } from "@/lib/axios-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Bed, Users, Wifi, Coffee, MapPin, CheckCircle2, Calendar, 
-  CreditCard, ArrowLeft, ArrowRight, Check, Shield, Clock, Utensils, Car
+  Bed, Users, Wifi, Coffee, CheckCircle2, Calendar,
+  CreditCard, ArrowLeft, ArrowRight, Check, Shield, Clock, Utensils, Car,
+  Mail, FileText, Loader2, BadgeCheck
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -39,6 +41,9 @@ export default function RoomDetail() {
   const { toast } = useToast();
   const [step, setStep] = useState<"details" | "payment" | "confirm">("details");
   const [confirmedRes, setConfirmedRes] = useState<any>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "invoice">("card");
+  const [processingStep, setProcessingStep] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: room, isLoading } = useGetRoom(
     id || "",
@@ -69,13 +74,30 @@ export default function RoomDetail() {
     }
   }
 
+  const PROCESSING_STEPS = [
+    "Verificando datos...",
+    "Procesando pago...",
+    "Generando factura...",
+    "Confirmando reservacion...",
+  ];
+
   const createRes = useCreateReservation({
     mutation: {
-      onSuccess: (data) => {
-        setConfirmedRes(data);
+      onSuccess: async (data: any) => {
+        try {
+          const payResp = await axiosInstance.post(`/reservations/${data.id}/pay`, {
+            metodoPago: paymentMethod === "card" ? "tarjeta" : "factura",
+          });
+          setConfirmedRes({ ...data, ...payResp.data });
+        } catch {
+          setConfirmedRes(data);
+        }
+        setIsProcessing(false);
         setStep("confirm");
       },
       onError: (error: any) => {
+        setIsProcessing(false);
+        setProcessingStep(0);
         toast({
           variant: "destructive",
           title: "Error al reservar",
@@ -94,8 +116,16 @@ export default function RoomDetail() {
     setStep("payment");
   });
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
     if (!room) return;
+    setIsProcessing(true);
+    setProcessingStep(0);
+
+    for (let i = 0; i < PROCESSING_STEPS.length; i++) {
+      await new Promise(r => setTimeout(r, 900));
+      setProcessingStep(i + 1);
+    }
+
     const values = form.getValues();
     createRes.mutate({
       data: {
@@ -138,55 +168,84 @@ export default function RoomDetail() {
 
   // CONFIRMATION STEP
   if (step === "confirm" && confirmedRes) {
+    const isFactura = confirmedRes.metodoPago === "factura";
     return (
       <div className="min-h-screen bg-muted flex items-center justify-center p-4">
-        <div className="bg-card border max-w-lg w-full p-8 text-center shadow-lg">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Check className="h-8 w-8 text-green-600" />
-          </div>
-          <h1 className="font-serif text-3xl font-bold text-foreground mb-2">Reservacion Confirmada</h1>
-          <p className="text-muted-foreground mb-6">Su habitacion ha sido reservada exitosamente. Le esperamos.</p>
-
-          <div className="bg-muted rounded p-4 text-left space-y-3 mb-6">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Numero de reservacion</span>
-              <span className="font-mono font-bold text-primary">#{confirmedRes.id?.slice(0, 8).toUpperCase() || "N/A"}</span>
+        <div className="bg-card border max-w-lg w-full shadow-lg overflow-hidden">
+          {/* Header verde */}
+          <div className="bg-green-600 p-8 text-center text-white">
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <BadgeCheck className="h-9 w-9 text-white" />
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Habitacion</span>
-              <span className="font-semibold">{room.nombre}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Llegada</span>
-              <span className="font-semibold">{format(parseISO(form.getValues("fechaEntrada")), "d 'de' MMMM yyyy", { locale: es })}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Salida</span>
-              <span className="font-semibold">{format(parseISO(form.getValues("fechaSalida")), "d 'de' MMMM yyyy", { locale: es })}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Noches</span>
-              <span className="font-semibold">{nights}</span>
-            </div>
-            <div className="border-t pt-3 flex justify-between">
-              <span className="font-semibold">Total pagado</span>
-              <span className="font-bold text-lg text-primary">Q{total.toFixed(2)}</span>
-            </div>
+            <h1 className="font-serif text-3xl font-bold mb-1">Pago Aprobado</h1>
+            <p className="text-green-100 text-sm">Reservacion confirmada exitosamente</p>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 p-3 rounded text-sm text-blue-800 mb-6 text-left">
-            <p className="font-semibold mb-1">Informacion importante</p>
-            <p>Check-in: 3:00 PM | Check-out: 12:00 PM</p>
-            <p>Presentese con su DPI o pasaporte en recepcion.</p>
-          </div>
+          <div className="p-6 space-y-4">
+            {/* Codigo de autorizacion */}
+            {confirmedRes.codigoAutorizacion && (
+              <div className="bg-green-50 border border-green-200 p-3 rounded flex items-center justify-between">
+                <span className="text-sm text-green-800 font-medium">Codigo de autorizacion</span>
+                <span className="font-mono font-bold text-green-700 text-lg tracking-widest">{confirmedRes.codigoAutorizacion}</span>
+              </div>
+            )}
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button onClick={() => setLocation("/my-reservations")} className="flex-1 bg-primary text-white" data-testid="button-view-reservations">
-              Ver Mis Reservaciones
-            </Button>
-            <Button variant="outline" onClick={() => setLocation("/")} className="flex-1">
-              Volver al Inicio
-            </Button>
+            {/* Detalles */}
+            <div className="bg-muted rounded p-4 text-left space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">No. Reservacion</span>
+                <span className="font-mono font-bold text-primary">#{confirmedRes.id?.slice(0, 8).toUpperCase()}</span>
+              </div>
+              {confirmedRes.numeroFactura && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">No. Factura</span>
+                  <span className="font-mono font-semibold">{confirmedRes.numeroFactura}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Habitacion</span>
+                <span className="font-semibold">{room.nombre}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Llegada</span>
+                <span className="font-semibold">{format(parseISO(form.getValues("fechaEntrada")), "d 'de' MMMM yyyy", { locale: es })}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Salida</span>
+                <span className="font-semibold">{format(parseISO(form.getValues("fechaSalida")), "d 'de' MMMM yyyy", { locale: es })}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Metodo de pago</span>
+                <span className="font-semibold capitalize">{isFactura ? "Factura por correo" : "Tarjeta"}</span>
+              </div>
+              <div className="border-t pt-3 flex justify-between">
+                <span className="font-semibold">Total pagado</span>
+                <span className="font-bold text-lg text-primary">Q{total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Factura por correo */}
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded text-sm text-blue-800 flex gap-3">
+              <Mail className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold mb-1">Factura enviada a su correo</p>
+                <p className="text-blue-700">{user?.email}</p>
+                <p className="text-xs text-blue-600 mt-1">Revise su bandeja de entrada o carpeta de spam.</p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 p-3 rounded text-xs text-amber-800">
+              <strong>Check-in:</strong> 3:00 PM &nbsp;|&nbsp; <strong>Check-out:</strong> 12:00 PM &nbsp;|&nbsp; Presentese con DPI o pasaporte.
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button onClick={() => setLocation("/my-reservations")} className="flex-1 bg-primary text-white" data-testid="button-view-reservations">
+                Ver Mis Reservaciones
+              </Button>
+              <Button variant="outline" onClick={() => setLocation("/")} className="flex-1">
+                Volver al Inicio
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -360,61 +419,121 @@ export default function RoomDetail() {
                     <Shield className="h-3 w-3" /> Reservacion segura y sin cargos adicionales
                   </p>
                 </form>
+              ) : isProcessing ? (
+                /* ANIMACION DE PROCESAMIENTO */
+                <div className="p-8 flex flex-col items-center text-center space-y-6">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground mb-1">Procesando su pago</p>
+                    <p className="text-sm text-muted-foreground">Por favor no cierre esta ventana</p>
+                  </div>
+                  <div className="w-full space-y-2">
+                    {PROCESSING_STEPS.map((label, i) => (
+                      <div key={i} className={`flex items-center gap-3 text-sm p-2 rounded transition-all ${processingStep > i ? "text-green-700" : processingStep === i ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                        {processingStep > i
+                          ? <Check className="h-4 w-4 text-green-600 shrink-0" />
+                          : processingStep === i
+                            ? <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
+                            : <div className="h-4 w-4 rounded-full border-2 border-muted shrink-0" />
+                        }
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Q{total.toFixed(2)} — {paymentMethod === "card" ? "Tarjeta" : "Factura por correo"}</p>
+                </div>
               ) : (
                 <div className="p-6 space-y-4">
-                  {/* Payment simulation */}
-                  <p className="text-sm text-muted-foreground">Complete los datos de pago para confirmar su reservacion.</p>
+                  <p className="text-sm text-muted-foreground font-medium">Seleccione metodo de pago</p>
 
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs uppercase tracking-wider text-muted-foreground">Nombre en la tarjeta</Label>
-                      <Input placeholder="MARIA LOPEZ GARCIA" className="uppercase" data-testid="input-card-name" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs uppercase tracking-wider text-muted-foreground">Numero de tarjeta</Label>
-                      <div className="relative">
-                        <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="4242 4242 4242 4242" className="pl-10" maxLength={19} data-testid="input-card-number" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Vencimiento</Label>
-                        <Input placeholder="MM/AA" maxLength={5} data-testid="input-card-expiry" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">CVV</Label>
-                        <Input placeholder="123" maxLength={4} type="password" data-testid="input-card-cvv" />
-                      </div>
-                    </div>
+                  {/* Selector de metodo */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("card")}
+                      className={`p-3 border-2 rounded text-left transition-all ${paymentMethod === "card" ? "border-primary bg-primary/5" : "border-muted hover:border-primary/40"}`}
+                    >
+                      <CreditCard className={`h-5 w-5 mb-1 ${paymentMethod === "card" ? "text-primary" : "text-muted-foreground"}`} />
+                      <p className="text-xs font-semibold">Tarjeta</p>
+                      <p className="text-xs text-muted-foreground">Credito / Debito</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("invoice")}
+                      className={`p-3 border-2 rounded text-left transition-all ${paymentMethod === "invoice" ? "border-primary bg-primary/5" : "border-muted hover:border-primary/40"}`}
+                    >
+                      <FileText className={`h-5 w-5 mb-1 ${paymentMethod === "invoice" ? "text-primary" : "text-muted-foreground"}`} />
+                      <p className="text-xs font-semibold">Factura</p>
+                      <p className="text-xs text-muted-foreground">Pago por correo</p>
+                    </button>
                   </div>
 
+                  {/* Formulario segun metodo */}
+                  {paymentMethod === "card" ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Nombre en la tarjeta</Label>
+                        <Input placeholder="MARIA LOPEZ GARCIA" className="uppercase" data-testid="input-card-name" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Numero de tarjeta</Label>
+                        <div className="relative">
+                          <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input placeholder="4242 4242 4242 4242" className="pl-10" maxLength={19} data-testid="input-card-number" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">Vencimiento</Label>
+                          <Input placeholder="MM/AA" maxLength={5} data-testid="input-card-expiry" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs uppercase tracking-wider text-muted-foreground">CVV</Label>
+                          <Input placeholder="123" maxLength={4} type="password" data-testid="input-card-cvv" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded space-y-2">
+                      <div className="flex items-center gap-2 text-blue-800 font-semibold text-sm">
+                        <Mail className="h-4 w-4" /> Pago por factura electronica
+                      </div>
+                      <p className="text-xs text-blue-700">Se generara una factura electronica y se enviara a:</p>
+                      <p className="font-mono text-sm text-blue-900 font-bold">{user?.email}</p>
+                      <p className="text-xs text-blue-600">Tendra 48 horas para realizar el pago. Su reservacion quedara confirmada al acreditarse el pago.</p>
+                    </div>
+                  )}
+
+                  {/* Resumen */}
                   <div className="bg-muted p-4 text-sm space-y-1 border">
                     <div className="flex justify-between text-muted-foreground">
                       <span>{room.nombre}</span>
                       <span>{nights} noche{nights !== 1 ? "s" : ""}</span>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Subtotal + IVA</span>
+                      <span>Subtotal + IVA (12%)</span>
                       <span>Q{total.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-base pt-2 border-t">
-                      <span>Cargo total</span>
+                      <span>Total a pagar</span>
                       <span className="text-primary">Q{total.toFixed(2)}</span>
                     </div>
                   </div>
 
-                  <div className="bg-blue-50 border border-blue-200 p-3 text-xs text-blue-700 rounded">
-                    <strong>Modo demostracion:</strong> Este es un sistema educativo. No se realizara ningun cargo real.
+                  <div className="bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 rounded flex gap-2">
+                    <Shield className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                    <span><strong>Sistema educativo:</strong> No se realizara ningun cargo real. Simulacion de pago para demostracion.</span>
                   </div>
 
                   <Button
                     className="w-full bg-green-600 hover:bg-green-700 text-white uppercase tracking-wide py-5 gap-2 font-semibold"
                     onClick={handleConfirmPayment}
-                    disabled={createRes.isPending}
+                    disabled={isProcessing}
                     data-testid="button-confirm-payment"
                   >
-                    {createRes.isPending ? "Procesando..." : "Confirmar y Pagar"}
+                    {paymentMethod === "card" ? "Confirmar y Pagar" : "Confirmar y Enviar Factura"}
                     <Check className="h-4 w-4" />
                   </Button>
 
@@ -422,6 +541,7 @@ export default function RoomDetail() {
                     variant="outline"
                     className="w-full"
                     onClick={() => setStep("details")}
+                    disabled={isProcessing}
                     data-testid="button-back-details"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" /> Regresar
