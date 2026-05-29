@@ -21,7 +21,7 @@ const SERVICES = [
 ];
 
 const GALLERY = [
-  "https://images.unsplash.com/photo-1542314831-c53cd4b85ca4?w=800&h=600&fit=crop",
+  "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&h=600&fit=crop",
   "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800&h=600&fit=crop",
   "https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=800&h=600&fit=crop",
   "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=600&fit=crop",
