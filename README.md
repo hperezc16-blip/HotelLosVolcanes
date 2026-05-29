@@ -167,5 +167,5 @@ Ver [DEPLOY_SETUP.md](DEPLOY_SETUP.md) para la guía completa paso a paso.
 
 ## Autores
 
-- **Héctor Pérez** — hperezc16@miumg.edu.gt
+- **Hazel Ruvi Pérez Cárcamo** — hperezc16@miumg.edu.gt
 - Universidad Mariano Gálvez de Guatemala — Ingeniería de Software
