@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "pnpm --filter @workspace/api-server build"
+buildCommand = "./node_modules/.bin/esbuild artifacts/api-server/src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=artifacts/api-server/dist/index.mjs --sourcemap --packages=external"
 
 [deploy]
 startCommand = "node --enable-source-maps ./artifacts/api-server/dist/index.mjs"
