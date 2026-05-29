@@ -2,6 +2,21 @@
 
 Sistema de reservaciones hoteleras desarrollado como proyecto de Ingeniería de Software — Universidad Mariano Gálvez de Guatemala.
 
+## Despliegue en Producción
+
+| Servicio | URL |
+|---|---|
+| **Frontend** | https://hotel-los-volcanes-api-server.vercel.app |
+| **API Backend** | https://sistema-reservaciones-hotel-production.up.railway.app |
+| **Health Check** | https://sistema-reservaciones-hotel-production.up.railway.app/api/health |
+
+### Credenciales de demostración
+
+| Rol | Correo | Contraseña |
+|---|---|---|
+| Administrador | admin@hotel.com | Admin123! |
+| Cliente | maria@example.com | Admin123! |
+
 ## Stack Tecnológico
 
 | Capa | Tecnología |
