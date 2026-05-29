@@ -73,4 +73,46 @@ router.get("/auth/me", requireAuth, async (req: AuthRequest, res) => {
   res.json(publicUser);
 });
 
+router.patch("/auth/profile", requireAuth, async (req: AuthRequest, res) => {
+  const { nombre, telefono, passwordActual, passwordNueva } = req.body as {
+    nombre?: string; telefono?: string; passwordActual?: string; passwordNueva?: string;
+  };
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+  if (!user) {
+    res.status(404).json({ error: "Not Found", message: "Usuario no encontrado" });
+    return;
+  }
+
+  if (passwordActual && passwordNueva) {
+    if (passwordNueva.length < 8) {
+      res.status(400).json({ error: "Bad Request", message: "La nueva contraseña debe tener al menos 8 caracteres" });
+      return;
+    }
+    const valid = await bcrypt.compare(passwordActual, user.passwordHash);
+    if (!valid) {
+      res.status(400).json({ error: "Bad Request", message: "Contraseña actual incorrecta" });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(passwordNueva, 12);
+    const [updated] = await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id)).returning();
+    const { passwordHash: _, ...publicUser } = updated;
+    res.json(publicUser);
+    return;
+  }
+
+  const updates: Partial<typeof user> = {};
+  if (nombre !== undefined) updates.nombre = nombre.trim();
+  if (telefono !== undefined) updates.telefono = telefono || null;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "Bad Request", message: "No hay cambios para guardar" });
+    return;
+  }
+
+  const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, user.id)).returning();
+  const { passwordHash: _, ...publicUser } = updated;
+  res.json(publicUser);
+});
+
 export default router;

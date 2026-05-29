@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../../contexts/AuthContext";
 import { Button } from "../ui/button";
-import { LogOut, Home, CalendarRange, Bed, LayoutDashboard, CalendarDays } from "lucide-react";
+import { LogOut, Home, CalendarRange, Bed, LayoutDashboard, CalendarDays, BarChart2, Users, Package, LogIn } from "lucide-react";
 import { useEffect } from "react";
 import {
   DropdownMenu,
@@ -35,6 +35,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/reservations", label: "Reservaciones", icon: CalendarRange },
     { href: "/calendar", label: "Calendario", icon: CalendarDays },
     { href: "/rooms", label: "Habitaciones", icon: Bed },
+    { href: "/checkinout", label: "Check-in / Check-out", icon: LogIn },
+    { href: "/inventory", label: "Inventario", icon: Package },
+    { href: "/reports", label: "Reportes", icon: BarChart2 },
+    { href: "/users", label: "Usuarios", icon: Users },
   ];
 
   return (

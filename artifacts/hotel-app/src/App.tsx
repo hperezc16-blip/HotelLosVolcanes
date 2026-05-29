@@ -12,10 +12,18 @@ import RoomDetail from "./pages/RoomDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyReservations from "./pages/MyReservations";
+import Profile from "./pages/Profile";
+import Services from "./pages/Services";
+import Gallery from "./pages/Gallery";
+import Contact from "./pages/Contact";
 import Dashboard from "./pages/admin/Dashboard";
 import AdminRooms from "./pages/admin/Rooms";
 import AdminReservations from "./pages/admin/Reservations";
 import AdminCalendar from "./pages/admin/Calendar";
+import AdminReports from "./pages/admin/Reports";
+import AdminUsers from "./pages/admin/Users";
+import AdminInventory from "./pages/admin/Inventory";
+import AdminCheckInOut from "./pages/admin/CheckInOut";
 
 // Layouts
 import MainLayout from "./components/layout/MainLayout";
@@ -33,11 +41,15 @@ function Router() {
             <Route path="/reservations" component={AdminReservations} />
             <Route path="/calendar" component={AdminCalendar} />
             <Route path="/rooms" component={AdminRooms} />
+            <Route path="/checkinout" component={AdminCheckInOut} />
+            <Route path="/inventory" component={AdminInventory} />
+            <Route path="/reports" component={AdminReports} />
+            <Route path="/users" component={AdminUsers} />
             <Route component={NotFound} />
           </Switch>
         </AdminLayout>
       </Route>
-      
+
       <Route path="/" nest>
         <MainLayout>
           <Switch>
@@ -47,6 +59,10 @@ function Router() {
             <Route path="/login" component={Login} />
             <Route path="/register" component={Register} />
             <Route path="/my-reservations" component={MyReservations} />
+            <Route path="/profile" component={Profile} />
+            <Route path="/services" component={Services} />
+            <Route path="/gallery" component={Gallery} />
+            <Route path="/contact" component={Contact} />
             <Route component={NotFound} />
           </Switch>
         </MainLayout>

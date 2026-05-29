@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { 
-  Menu, X, User, LogOut, Settings, ChevronDown, 
-  BedDouble, CalendarCheck, Phone, HelpCircle
+import {
+  Menu, X, User, LogOut, Settings, ChevronDown,
+  BedDouble, CalendarCheck
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -17,11 +17,9 @@ import {
 
 const NAV_LINKS = [
   { href: "/rooms", label: "Habitaciones" },
-  { href: "/#servicios", label: "Servicios" },
-  { href: "/#galeria", label: "Galeria" },
-  { href: "/#politicas", label: "Politicas" },
-  { href: "/#faq", label: "FAQ" },
-  { href: "/#contacto", label: "Contacto" },
+  { href: "/services", label: "Servicios" },
+  { href: "/gallery", label: "Galería" },
+  { href: "/contact", label: "Contacto" },
 ];
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -46,24 +44,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
           <nav className="hidden lg:flex items-center gap-6 text-sm font-medium">
             {NAV_LINKS.map(({ href, label }) => (
-              <a
+              <Link
                 key={href}
                 href={href}
-                onClick={e => {
-                  if (href.startsWith("/#")) {
-                    e.preventDefault();
-                    if (window.location.pathname !== "/hotel-app/") setLocation("/");
-                    setTimeout(() => {
-                      const id = href.split("#")[1];
-                      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-                    }, 100);
-                  }
-                }}
                 className="text-muted-foreground hover:text-primary transition-colors"
                 data-testid={`nav-${label.toLowerCase()}`}
               >
                 {label}
-              </a>
+              </Link>
             ))}
           </nav>
 
@@ -87,6 +75,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setLocation("/profile")} className="gap-2 cursor-pointer" data-testid="menu-profile">
+                    <User className="h-4 w-4" />
+                    Mi Perfil
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setLocation("/my-reservations")} className="gap-2 cursor-pointer" data-testid="menu-my-reservations">
                     <CalendarCheck className="h-4 w-4" />
                     Mis Reservaciones
@@ -134,14 +126,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         {mobileOpen && (
           <div className="lg:hidden border-t bg-white px-4 py-4 space-y-2">
             {NAV_LINKS.map(({ href, label }) => (
-              <a
+              <Link
                 key={href}
                 href={href}
                 onClick={() => setMobileOpen(false)}
                 className="block py-2 text-muted-foreground hover:text-primary text-sm font-medium"
               >
                 {label}
-              </a>
+              </Link>
             ))}
             <div className="border-t pt-3 space-y-2">
               {user ? (
@@ -199,10 +191,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <h4 className="font-semibold mb-4 text-primary uppercase tracking-wider text-xs">El Hotel</h4>
             <ul className="space-y-2 text-sm text-secondary-foreground/70">
               <li><Link href="/rooms" className="hover:text-primary transition-colors">Habitaciones</Link></li>
-              <li><a href="/#servicios" className="hover:text-primary transition-colors">Servicios</a></li>
-              <li><a href="/#galeria" className="hover:text-primary transition-colors">Galeria</a></li>
-              <li><a href="/#politicas" className="hover:text-primary transition-colors">Politicas</a></li>
-              <li><a href="/#faq" className="hover:text-primary transition-colors">Preguntas Frecuentes</a></li>
+              <li><Link href="/services" className="hover:text-primary transition-colors">Servicios</Link></li>
+              <li><Link href="/gallery" className="hover:text-primary transition-colors">Galería</Link></li>
+              <li><Link href="/contact" className="hover:text-primary transition-colors">Contacto</Link></li>
+              <li><Link href="/contact#faq" className="hover:text-primary transition-colors">Preguntas Frecuentes</Link></li>
             </ul>
           </div>
           <div>
