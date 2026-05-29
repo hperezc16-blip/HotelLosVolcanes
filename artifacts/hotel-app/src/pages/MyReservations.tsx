@@ -98,8 +98,8 @@ export default function MyReservations() {
     }
   };
 
-  const activas = reservations?.filter(r => r.estado === "confirmada" || r.estado === "pendiente") || [];
-  const pasadas = reservations?.filter(r => r.estado !== "confirmada" && r.estado !== "pendiente") || [];
+  const activas = reservations?.filter(r => r.estado === "confirmada" || (r.estado as string) === "pendiente") || [];
+  const pasadas = reservations?.filter(r => r.estado !== "confirmada" && (r.estado as string) !== "pendiente") || [];
 
   return (
     <div className="bg-background min-h-screen">
