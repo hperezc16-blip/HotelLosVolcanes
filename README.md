@@ -173,12 +173,26 @@ Ver [DEPLOY_SETUP.md](DEPLOY_SETUP.md) para la guía completa paso a paso.
 - Gestión de reservaciones (cambiar estado, estado de pago)
 - Calendario de ocupación (vista de 30 días)
 
-## Ramas
+## Estrategia de ramas y ambientes
 
-| Rama | Propósito |
-|---|---|
-| `main` | Código en producción (estable) |
-| `develop` | Integración de nuevas funcionalidades |
+Cada ambiente se maneja con una rama. El código solo avanza hacia el siguiente ambiente mediante Pull Request.
+
+| Rama | Ambiente | Recibe cambios desde | Condición para hacer merge |
+|---|---|---|---|
+| `feature/*`, `fix/*` | Local | `develop` | — |
+| `develop` | DEV | PR desde `feature/*` o `fix/*` | Pipeline en verde + 1 aprobación |
+| `qa` | QA | PR desde `develop` | Pipeline en verde + 1 aprobación |
+| `main` | PROD | PR desde `qa` | Pipeline en verde + 1 aprobación |
+
+### Política de promoción
+
+1. Todo cambio nuevo se trabaja en una rama `feature/<descripcion>` o `fix/<descripcion>` creada desde `develop`.
+2. Al terminar se abre un PR hacia `develop`. Otra integrante del equipo revisa el código y las pruebas antes de aprobar.
+3. Cuando `develop` está estable, se abre un PR de `develop` hacia `qa` para validar en el ambiente de QA.
+4. Después de la validación en QA, se abre un PR de `qa` hacia `main` para pasar a producción.
+5. No se hace push directo a `develop`, `qa` ni `main`.
+6. Las ramas `qa` y `main` están protegidas: el merge queda bloqueado si el pipeline falla o si el PR no tiene aprobación.
+7. Si se encuentra un defecto en QA, se corrige en una rama `fix/*` desde `develop` y vuelve a pasar por todo el flujo.
 
 ## Autores
 
