@@ -6,6 +6,8 @@ import { requireAuth, type AuthRequest } from "../middlewares/auth.js";
 
 const router: Router = Router();
 
+const ESTADOS_RESERVA = ["pendiente", "confirmada", "cancelada", "completada"];
+
 async function enrichReservation(r: typeof reservationsTable.$inferSelect) {
   const [room] = await db.select().from(roomsTable).where(eq(roomsTable.id, r.habitacionId)).limit(1);
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, r.clienteId)).limit(1);
@@ -16,6 +18,11 @@ async function enrichReservation(r: typeof reservationsTable.$inferSelect) {
 router.get("/reservations", requireAuth, async (req: AuthRequest, res) => {
   const { estado } = req.query as { estado?: string };
   const isAdmin = req.user!.rol === "admin";
+
+  if (estado && !ESTADOS_RESERVA.includes(estado)) {
+    res.status(400).json({ error: "Bad Request", message: "Estado inválido" });
+    return;
+  }
 
   let query = db.select().from(reservationsTable).orderBy(desc(reservationsTable.createdAt));
   let reservations;
@@ -43,6 +50,10 @@ router.post("/reservations", requireAuth, async (req: AuthRequest, res) => {
 
   const entradaDate = new Date(fechaEntrada);
   const salidaDate = new Date(fechaSalida);
+  if (isNaN(entradaDate.getTime()) || isNaN(salidaDate.getTime())) {
+    res.status(400).json({ error: "Bad Request", message: "Formato de fecha inválido" });
+    return;
+  }
   if (entradaDate >= salidaDate) {
     res.status(400).json({ error: "Bad Request", message: "La fecha de salida debe ser posterior a la de entrada" });
     return;
@@ -117,10 +128,9 @@ router.patch("/reservations/:id", requireAuth, async (req: AuthRequest, res) => 
 
   if (req.user!.rol === "admin") {
     const { estado, estadoPago, notas } = req.body as { estado?: string; estadoPago?: string; notas?: string };
-    const validEstados = ["pendiente", "confirmada", "cancelada", "completada"];
     const validEstadosPago = ["pendiente", "anticipo", "pagado"];
 
-    if (estado && !validEstados.includes(estado)) {
+    if (estado && !ESTADOS_RESERVA.includes(estado)) {
       res.status(400).json({ error: "Bad Request", message: "Estado inválido" });
       return;
     }
