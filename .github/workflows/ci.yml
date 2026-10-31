@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop, qa, main]
   pull_request:
-    branches: [main, develop]
+    branches: [develop, qa, main]
 
 env:
   NODE_VERSION: '20'
@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    name: Build & Typecheck
+    name: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +36,8 @@ jobs:
         run: pnpm build
 
   lint:
-    name: Lint
+    name: lint
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +58,8 @@ jobs:
         run: pnpm lint
 
   test:
-    name: Tests & Coverage
+    name: unit-tests
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,7 +86,7 @@ jobs:
           path: coverage/
 
   deploy:
-    name: Deploy
+    name: deploy
     needs: [build, lint, test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
