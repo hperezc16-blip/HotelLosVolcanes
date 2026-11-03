@@ -114,6 +114,33 @@ router.get("/reservations/:id", requireAuth, async (req: AuthRequest, res) => {
   res.json(enriched);
 });
 
+const ESTADOS_PAGO = ["pendiente", "anticipo", "pagado"];
+
+type AdminUpdate = { error: string } | { fields: Record<string, string> };
+
+/** Valida el cuerpo que envía el administrador y arma los campos a actualizar. */
+export function buildAdminUpdate(body: { estado?: string; estadoPago?: string; notas?: string }): AdminUpdate {
+  const { estado, estadoPago, notas } = body;
+  if (estado && !ESTADOS_RESERVA.includes(estado)) return { error: "Estado inválido" };
+  if (estadoPago && !ESTADOS_PAGO.includes(estadoPago)) return { error: "Estado de pago inválido" };
+
+  const fields: Record<string, string> = {};
+  if (estado) fields["estado"] = estado;
+  if (estadoPago) fields["estadoPago"] = estadoPago;
+  if (notas !== undefined) fields["notas"] = notas;
+
+  if (Object.keys(fields).length === 0) return { error: "No se enviaron campos para actualizar" };
+  return { fields };
+}
+
+async function updateReservation(id: string, fields: Record<string, string>) {
+  const [updated] = await db.update(reservationsTable)
+    .set(fields as Partial<typeof reservationsTable.$inferInsert>)
+    .where(eq(reservationsTable.id, id))
+    .returning();
+  return enrichReservation(updated);
+}
+
 router.patch("/reservations/:id", requireAuth, async (req: AuthRequest, res) => {
   const id = req.params.id as string;
   const [reservation] = await db.select().from(reservationsTable).where(eq(reservationsTable.id, id)).limit(1);
@@ -121,54 +148,28 @@ router.patch("/reservations/:id", requireAuth, async (req: AuthRequest, res) => 
     res.status(404).json({ error: "Not Found", message: "Reserva no encontrada" });
     return;
   }
-  if (req.user!.rol !== "admin" && reservation.clienteId !== req.user!.id) {
+  const isAdmin = req.user!.rol === "admin";
+  if (!isAdmin && reservation.clienteId !== req.user!.id) {
     res.status(403).json({ error: "Forbidden", message: "No autorizado" });
     return;
   }
 
-  if (req.user!.rol === "admin") {
-    const { estado, estadoPago, notas } = req.body as { estado?: string; estadoPago?: string; notas?: string };
-    const validEstadosPago = ["pendiente", "anticipo", "pagado"];
-
-    if (estado && !ESTADOS_RESERVA.includes(estado)) {
-      res.status(400).json({ error: "Bad Request", message: "Estado inválido" });
+  if (isAdmin) {
+    const result = buildAdminUpdate(req.body);
+    if ("error" in result) {
+      res.status(400).json({ error: "Bad Request", message: result.error });
       return;
     }
-    if (estadoPago && !validEstadosPago.includes(estadoPago)) {
-      res.status(400).json({ error: "Bad Request", message: "Estado de pago inválido" });
-      return;
-    }
-
-    const updateFields: Record<string, string> = {};
-    if (estado) updateFields["estado"] = estado;
-    if (estadoPago) updateFields["estadoPago"] = estadoPago;
-    if (notas !== undefined) updateFields["notas"] = notas;
-
-    if (Object.keys(updateFields).length === 0) {
-      res.status(400).json({ error: "Bad Request", message: "No se enviaron campos para actualizar" });
-      return;
-    }
-
-    const [updated] = await db.update(reservationsTable)
-      .set(updateFields as any)
-      .where(eq(reservationsTable.id, id))
-      .returning();
-
-    const enriched = await enrichReservation(updated);
-    res.json(enriched);
-  } else {
-    if (reservation.estado === "cancelada") {
-      res.status(400).json({ error: "Bad Request", message: "La reserva ya está cancelada" });
-      return;
-    }
-    const [updated] = await db.update(reservationsTable)
-      .set({ estado: "cancelada" })
-      .where(eq(reservationsTable.id, id))
-      .returning();
-
-    const enriched = await enrichReservation(updated);
-    res.json(enriched);
+    res.json(await updateReservation(id, result.fields));
+    return;
   }
+
+  // El cliente solo puede cancelar su propia reservación.
+  if (reservation.estado === "cancelada") {
+    res.status(400).json({ error: "Bad Request", message: "La reserva ya está cancelada" });
+    return;
+  }
+  res.json(await updateReservation(id, { estado: "cancelada" }));
 });
 
 router.post("/reservations/:id/pay", requireAuth, async (req: AuthRequest, res) => {

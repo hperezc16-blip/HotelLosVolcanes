@@ -7,7 +7,7 @@ vi.mock("drizzle-orm", () => {
   return { eq: f, and: f, or: f, ne: f, lte: f, gte: f, desc: f };
 });
 
-import reservationsRouter from "../../routes/reservations.js";
+import reservationsRouter, { buildAdminUpdate } from "../../routes/reservations.js";
 import { enqueue, resetDb, calls } from "./dbStub.js";
 import { buildApp, adminToken, clientToken, bearer, user, room, reservation } from "./app.js";
 
@@ -157,5 +157,23 @@ describe("POST /api/reservations/:id/pay - pago", () => {
     enqueue("reservations", [reservation({ clienteId: "otro" })]);
     const res = await request(app).post("/api/reservations/res-1/pay").set(bearer(clientToken("cli-1"))).send({});
     expect(res.status).toBe(403);
+  });
+});
+
+describe("buildAdminUpdate (validación del cambio de estado)", () => {
+  it("rechaza un estado que no existe", () => {
+    expect(buildAdminUpdate({ estado: "perdida" })).toEqual({ error: "Estado inválido" });
+  });
+
+  it("rechaza un estado de pago que no existe", () => {
+    expect(buildAdminUpdate({ estadoPago: "reembolsado" })).toEqual({ error: "Estado de pago inválido" });
+  });
+
+  it("rechaza una petición sin cambios", () => {
+    expect(buildAdminUpdate({})).toEqual({ error: "No se enviaron campos para actualizar" });
+  });
+
+  it("permite notas vacías para borrarlas", () => {
+    expect(buildAdminUpdate({ notas: "" })).toEqual({ fields: { notas: "" } });
   });
 });
