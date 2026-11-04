@@ -41,9 +41,6 @@ Thumbs.db
 .eslintcache
 .cache/
 
-# Directorio interno de Claude Code
-.claude/
-
 # Proyectos no relacionados
 TRADER_AI/
 
