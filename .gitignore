@@ -46,3 +46,9 @@ Thumbs.db
 
 # Proyectos no relacionados
 TRADER_AI/
+
+# Resultados generados por JMeter
+tests/carga/resultado/
+tests/carga/resultado_corto/
+*.jtl
+jmeter.log
