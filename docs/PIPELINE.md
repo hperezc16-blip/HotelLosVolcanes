@@ -25,6 +25,8 @@ Se ejecuta en cada push y Pull Request hacia `develop` (DEV), `qa` (QA) y `main`
 
 **SonarCloud:** desactivar *Automatic Analysis* (Administration → Analysis Method), porque el análisis lo hace el pipeline.
 
+El plan gratuito de SonarCloud solo analiza la rama main y los Pull Requests. Por eso, en los push a develop y qa el job `3. sonarcloud` no vuelve a analizar: ese código ya pasó el quality gate en su Pull Request.
+
 **Render:** en Settings → Build & Deploy, poner *Auto-Deploy* en **Off**, para que solo el pipeline despliegue a producción.
 
 ## Bloqueo de merge
