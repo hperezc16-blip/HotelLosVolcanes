@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { calcStayPrice } from "@/lib/rooms";
 import {
   Bed, Users, Wifi, Coffee, CheckCircle2, Calendar,
   CreditCard, ArrowLeft, ArrowRight, Check, Shield, Clock, Utensils, Car,
@@ -16,7 +17,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { differenceInDays, parseISO, format } from "date-fns";
+import { parseISO, format } from "date-fns";
 import { es } from "date-fns/locale";
 
 const schema = z.object({
@@ -33,6 +34,27 @@ type FormValues = z.infer<typeof schema>;
 const TIPO_LABEL: Record<string, string> = { sencilla: "Sencilla", doble: "Doble", suite: "Suite", cabana: "Cabana" };
 
 const AMENITIES_DEFAULT = ["Aire acondicionado", "TV Smart 55\"", "Minibar", "Caja fuerte", "Bano privado", "Secadora de cabello", "Agua caliente 24h", "Vista panoramica"];
+
+const DEFAULT_IMG = "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=1200&h=600&fit=crop";
+const DEFAULT_DESCRIPCION = "Una hermosa habitacion disenada para su confort y descanso. Disfrute de vistas espectaculares y un servicio excepcional en Hotel Los Volcanes.";
+
+/** Datos de presentación de la habitación con sus valores por defecto. */
+function describeRoom(room: { imageUrl?: string | null; amenidades?: string | null; tipo: string; descripcion?: string | null }) {
+  return {
+    imgUrl: room.imageUrl || DEFAULT_IMG,
+    amenities: room.amenidades ? room.amenidades.split(",").map(a => a.trim()) : AMENITIES_DEFAULT,
+    tipoLabel: TIPO_LABEL[room.tipo] || room.tipo,
+    descripcion: room.descripcion || DEFAULT_DESCRIPCION,
+  };
+}
+
+/** Avanza la animación de procesamiento paso a paso. */
+async function runProcessingSteps(total: number, onStep: (n: number) => void, delayMs = 900) {
+  for (let i = 0; i < total; i++) {
+    await new Promise(r => setTimeout(r, delayMs));
+    onStep(i + 1);
+  }
+}
 
 export default function RoomDetail() {
   const { id } = useParams<{ id: string }>();
@@ -58,21 +80,7 @@ export default function RoomDetail() {
   const fechaEntrada = form.watch("fechaEntrada");
   const fechaSalida = form.watch("fechaSalida");
 
-  let nights = 0;
-  let subtotal = 0;
-  let impuesto = 0;
-  let total = 0;
-
-  if (fechaEntrada && fechaSalida && room) {
-    const start = parseISO(fechaEntrada);
-    const end = parseISO(fechaSalida);
-    if (end > start) {
-      nights = differenceInDays(end, start);
-      subtotal = nights * parseFloat(room.precioNoche);
-      impuesto = subtotal * 0.12;
-      total = subtotal + impuesto;
-    }
-  }
+  const { nights, subtotal, impuesto, total } = calcStayPrice(fechaEntrada, fechaSalida, room?.precioNoche);
 
   const PROCESSING_STEPS = [
     "Verificando datos...",
@@ -86,7 +94,7 @@ export default function RoomDetail() {
       onSuccess: async (data: any) => {
         try {
           const payResp = await axiosInstance.post(`/reservations/${data.id}/pay`, {
-            metodoPago: paymentMethod === "card" ? "tarjeta" : "factura",
+            metodoPago: PAYMENT_API[paymentMethod],
           });
           setConfirmedRes({ ...data, ...payResp.data });
         } catch {
@@ -101,7 +109,7 @@ export default function RoomDetail() {
         toast({
           variant: "destructive",
           title: "Error al reservar",
-          description: error.response?.data?.message || "No se pudo procesar la reservacion.",
+          description: apiErrorMessage(error, "No se pudo procesar la reservacion."),
         });
       }
     }
@@ -121,10 +129,7 @@ export default function RoomDetail() {
     setIsProcessing(true);
     setProcessingStep(0);
 
-    for (let i = 0; i < PROCESSING_STEPS.length; i++) {
-      await new Promise(r => setTimeout(r, 900));
-      setProcessingStep(i + 1);
-    }
+    await runProcessingSteps(PROCESSING_STEPS.length, setProcessingStep);
 
     const values = form.getValues();
     createRes.mutate({
@@ -162,93 +167,20 @@ export default function RoomDetail() {
     );
   }
 
-  const imgUrl = room.imageUrl || "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=1200&h=600&fit=crop";
-  const amenities = room.amenidades ? room.amenidades.split(",").map(a => a.trim()) : AMENITIES_DEFAULT;
+  const { imgUrl, amenities, tipoLabel, descripcion } = describeRoom(room);
   const today = new Date().toISOString().split("T")[0];
 
-  // CONFIRMATION STEP
   if (step === "confirm" && confirmedRes) {
-    const isFactura = confirmedRes.metodoPago === "factura";
     return (
-      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
-        <div className="bg-card border max-w-lg w-full shadow-lg overflow-hidden">
-          {/* Header verde */}
-          <div className="bg-green-600 p-8 text-center text-white">
-            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BadgeCheck className="h-9 w-9 text-white" />
-            </div>
-            <h1 className="font-serif text-3xl font-bold mb-1">Pago Aprobado</h1>
-            <p className="text-green-100 text-sm">Reservacion confirmada exitosamente</p>
-          </div>
-
-          <div className="p-6 space-y-4">
-            {/* Codigo de autorizacion */}
-            {confirmedRes.codigoAutorizacion && (
-              <div className="bg-green-50 border border-green-200 p-3 rounded flex items-center justify-between">
-                <span className="text-sm text-green-800 font-medium">Codigo de autorizacion</span>
-                <span className="font-mono font-bold text-green-700 text-lg tracking-widest">{confirmedRes.codigoAutorizacion}</span>
-              </div>
-            )}
-
-            {/* Detalles */}
-            <div className="bg-muted rounded p-4 text-left space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">No. Reservacion</span>
-                <span className="font-mono font-bold text-primary">#{confirmedRes.id?.slice(0, 8).toUpperCase()}</span>
-              </div>
-              {confirmedRes.numeroFactura && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">No. Factura</span>
-                  <span className="font-mono font-semibold">{confirmedRes.numeroFactura}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Habitacion</span>
-                <span className="font-semibold">{room.nombre}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Llegada</span>
-                <span className="font-semibold">{format(parseISO(form.getValues("fechaEntrada")), "d 'de' MMMM yyyy", { locale: es })}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Salida</span>
-                <span className="font-semibold">{format(parseISO(form.getValues("fechaSalida")), "d 'de' MMMM yyyy", { locale: es })}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Metodo de pago</span>
-                <span className="font-semibold capitalize">{isFactura ? "Factura por correo" : "Tarjeta"}</span>
-              </div>
-              <div className="border-t pt-3 flex justify-between">
-                <span className="font-semibold">Total pagado</span>
-                <span className="font-bold text-lg text-primary">Q{total.toFixed(2)}</span>
-              </div>
-            </div>
-
-            {/* Factura por correo */}
-            <div className="bg-blue-50 border border-blue-200 p-4 rounded text-sm text-blue-800 flex gap-3">
-              <Mail className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold mb-1">Factura enviada a su correo</p>
-                <p className="text-blue-700">{user?.email}</p>
-                <p className="text-xs text-blue-600 mt-1">Revise su bandeja de entrada o carpeta de spam.</p>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 p-3 rounded text-xs text-amber-800">
-              <strong>Check-in:</strong> 3:00 PM &nbsp;|&nbsp; <strong>Check-out:</strong> 12:00 PM &nbsp;|&nbsp; Presentese con DPI o pasaporte.
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button onClick={() => setLocation("/my-reservations")} className="flex-1 bg-primary text-white" data-testid="button-view-reservations">
-                Ver Mis Reservaciones
-              </Button>
-              <Button variant="outline" onClick={() => setLocation("/")} className="flex-1">
-                Volver al Inicio
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ReservationConfirmed
+        reservation={confirmedRes}
+        roomName={room.nombre}
+        fechaEntrada={form.getValues("fechaEntrada")}
+        fechaSalida={form.getValues("fechaSalida")}
+        total={total}
+        email={user?.email}
+        onNavigate={setLocation}
+      />
     );
   }
 
@@ -266,7 +198,7 @@ export default function RoomDetail() {
         </button>
         <div className="absolute bottom-0 left-0 w-full p-8 container mx-auto">
           <span className="bg-primary text-white text-xs font-bold uppercase tracking-wider px-3 py-1 mb-3 inline-block">
-            {TIPO_LABEL[room.tipo] || room.tipo}
+            {tipoLabel}
           </span>
           <h1 className="font-serif text-4xl md:text-5xl font-bold text-white">{room.nombre}</h1>
         </div>
@@ -279,7 +211,7 @@ export default function RoomDetail() {
           <div className="lg:col-span-3 space-y-10">
             <div className="flex flex-wrap gap-6 text-muted-foreground border-b pb-8">
               <span className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Hasta {room.capacidad} personas</span>
-              <span className="flex items-center gap-2"><Bed className="h-5 w-5 text-primary" /> {TIPO_LABEL[room.tipo] || room.tipo}</span>
+              <span className="flex items-center gap-2"><Bed className="h-5 w-5 text-primary" /> {tipoLabel}</span>
               <span className="flex items-center gap-2"><Wifi className="h-5 w-5 text-primary" /> WiFi Gratis</span>
               <span className="flex items-center gap-2"><Coffee className="h-5 w-5 text-primary" /> Bar & Lounge</span>
               <span className="flex items-center gap-2"><Utensils className="h-5 w-5 text-primary" /> Restaurante</span>
@@ -289,7 +221,7 @@ export default function RoomDetail() {
             <div>
               <h2 className="font-serif text-2xl font-semibold mb-4">Descripcion</h2>
               <p className="text-muted-foreground leading-relaxed text-lg font-light">
-                {room.descripcion || "Una hermosa habitacion disenada para su confort y descanso. Disfrute de vistas espectaculares y un servicio excepcional en Hotel Los Volcanes."}
+                {descripcion}
               </p>
             </div>
 
@@ -420,54 +352,15 @@ export default function RoomDetail() {
                   </p>
                 </form>
               ) : isProcessing ? (
-                /* ANIMACION DE PROCESAMIENTO */
-                <div className="p-8 flex flex-col items-center text-center space-y-6">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-foreground mb-1">Procesando su pago</p>
-                    <p className="text-sm text-muted-foreground">Por favor no cierre esta ventana</p>
-                  </div>
-                  <div className="w-full space-y-2">
-                    {PROCESSING_STEPS.map((label, i) => (
-                      <div key={i} className={`flex items-center gap-3 text-sm p-2 rounded transition-all ${processingStep > i ? "text-green-700" : processingStep === i ? "text-primary font-medium" : "text-muted-foreground"}`}>
-                        {processingStep > i
-                          ? <Check className="h-4 w-4 text-green-600 shrink-0" />
-                          : processingStep === i
-                            ? <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
-                            : <div className="h-4 w-4 rounded-full border-2 border-muted shrink-0" />
-                        }
-                        {label}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Q{total.toFixed(2)} — {paymentMethod === "card" ? "Tarjeta" : "Factura por correo"}</p>
-                </div>
+                <ProcessingPanel steps={PROCESSING_STEPS} processingStep={processingStep} total={total} paymentMethod={paymentMethod} />
               ) : (
                 <div className="p-6 space-y-4">
                   <p className="text-sm text-muted-foreground font-medium">Seleccione metodo de pago</p>
 
                   {/* Selector de metodo */}
                   <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("card")}
-                      className={`p-3 border-2 rounded text-left transition-all ${paymentMethod === "card" ? "border-primary bg-primary/5" : "border-muted hover:border-primary/40"}`}
-                    >
-                      <CreditCard className={`h-5 w-5 mb-1 ${paymentMethod === "card" ? "text-primary" : "text-muted-foreground"}`} />
-                      <p className="text-xs font-semibold">Tarjeta</p>
-                      <p className="text-xs text-muted-foreground">Credito / Debito</p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("invoice")}
-                      className={`p-3 border-2 rounded text-left transition-all ${paymentMethod === "invoice" ? "border-primary bg-primary/5" : "border-muted hover:border-primary/40"}`}
-                    >
-                      <FileText className={`h-5 w-5 mb-1 ${paymentMethod === "invoice" ? "text-primary" : "text-muted-foreground"}`} />
-                      <p className="text-xs font-semibold">Factura</p>
-                      <p className="text-xs text-muted-foreground">Pago por correo</p>
-                    </button>
+                    <PaymentOption selected={paymentMethod === "card"} onSelect={() => setPaymentMethod("card")} icon={CreditCard} title="Tarjeta" subtitle="Credito / Debito" />
+                    <PaymentOption selected={paymentMethod === "invoice"} onSelect={() => setPaymentMethod("invoice")} icon={FileText} title="Factura" subtitle="Pago por correo" />
                   </div>
 
                   {/* Formulario segun metodo */}
@@ -510,7 +403,7 @@ export default function RoomDetail() {
                   <div className="bg-muted p-4 text-sm space-y-1 border">
                     <div className="flex justify-between text-muted-foreground">
                       <span>{room.nombre}</span>
-                      <span>{nights} noche{nights !== 1 ? "s" : ""}</span>
+                      <span>{nightsLabel(nights)}</span>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
                       <span>Subtotal + IVA (12%)</span>
@@ -552,6 +445,194 @@ export default function RoomDetail() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+type ConfirmedReservation = {
+  id?: string;
+  metodoPago?: string;
+  codigoAutorizacion?: string;
+  numeroFactura?: string;
+};
+
+function formatLongDate(value: string) {
+  return format(parseISO(value), "d 'de' MMMM yyyy", { locale: es });
+}
+
+function ReservationConfirmed({ reservation, roomName, fechaEntrada, fechaSalida, total, email, onNavigate }: {
+  reservation: ConfirmedReservation;
+  roomName: string;
+  fechaEntrada: string;
+  fechaSalida: string;
+  total: number;
+  email?: string;
+  onNavigate: (path: string) => void;
+}) {
+  const isFactura = reservation.metodoPago === "factura";
+  return (
+    <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+      <div className="bg-card border max-w-lg w-full shadow-lg overflow-hidden">
+        {/* Header verde */}
+        <div className="bg-green-600 p-8 text-center text-white">
+          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <BadgeCheck className="h-9 w-9 text-white" />
+          </div>
+          <h1 className="font-serif text-3xl font-bold mb-1">Pago Aprobado</h1>
+          <p className="text-green-100 text-sm">Reservacion confirmada exitosamente</p>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Codigo de autorizacion */}
+          {reservation.codigoAutorizacion && (
+            <div className="bg-green-50 border border-green-200 p-3 rounded flex items-center justify-between">
+              <span className="text-sm text-green-800 font-medium">Codigo de autorizacion</span>
+              <span className="font-mono font-bold text-green-700 text-lg tracking-widest">{reservation.codigoAutorizacion}</span>
+            </div>
+          )}
+
+          {/* Detalles */}
+          <div className="bg-muted rounded p-4 text-left space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">No. Reservacion</span>
+              <span className="font-mono font-bold text-primary">#{reservation.id?.slice(0, 8).toUpperCase()}</span>
+            </div>
+            {reservation.numeroFactura && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">No. Factura</span>
+                <span className="font-mono font-semibold">{reservation.numeroFactura}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Habitacion</span>
+              <span className="font-semibold">{roomName}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Llegada</span>
+              <span className="font-semibold">{formatLongDate(fechaEntrada)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Salida</span>
+              <span className="font-semibold">{formatLongDate(fechaSalida)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Metodo de pago</span>
+              <span className="font-semibold capitalize">{isFactura ? "Factura por correo" : "Tarjeta"}</span>
+            </div>
+            <div className="border-t pt-3 flex justify-between">
+              <span className="font-semibold">Total pagado</span>
+              <span className="font-bold text-lg text-primary">Q{total.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Factura por correo */}
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded text-sm text-blue-800 flex gap-3">
+            <Mail className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold mb-1">Factura enviada a su correo</p>
+              <p className="text-blue-700">{email}</p>
+              <p className="text-xs text-blue-600 mt-1">Revise su bandeja de entrada o carpeta de spam.</p>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded text-xs text-amber-800">
+            <strong>Check-in:</strong> 3:00 PM &nbsp;|&nbsp; <strong>Check-out:</strong> 12:00 PM &nbsp;|&nbsp; Presentese con DPI o pasaporte.
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <Button onClick={() => onNavigate("/my-reservations")} className="flex-1 bg-primary text-white" data-testid="button-view-reservations">
+              Ver Mis Reservaciones
+            </Button>
+            <Button variant="outline" onClick={() => onNavigate("/")} className="flex-1">
+              Volver al Inicio
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type StepStatus = "done" | "current" | "pending";
+
+function stepStatus(processingStep: number, index: number): StepStatus {
+  if (processingStep > index) return "done";
+  if (processingStep === index) return "current";
+  return "pending";
+}
+
+const STEP_TEXT_CLASS: Record<StepStatus, string> = {
+  done: "text-green-700",
+  current: "text-primary font-medium",
+  pending: "text-muted-foreground",
+};
+
+function ProcessingStepItem({ label, status }: { label: string; status: StepStatus }) {
+  let icon = <div className="h-4 w-4 rounded-full border-2 border-muted shrink-0" />;
+  if (status === "done") icon = <Check className="h-4 w-4 text-green-600 shrink-0" />;
+  if (status === "current") icon = <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />;
+  return (
+    <div className={`flex items-center gap-3 text-sm p-2 rounded transition-all ${STEP_TEXT_CLASS[status]}`}>
+      {icon}
+      {label}
+    </div>
+  );
+}
+
+function PaymentOption({ selected, onSelect, icon: Icon, title, subtitle }: {
+  selected: boolean;
+  onSelect: () => void;
+  icon: typeof CreditCard;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`p-3 border-2 rounded text-left transition-all ${selected ? "border-primary bg-primary/5" : "border-muted hover:border-primary/40"}`}
+    >
+      <Icon className={`h-5 w-5 mb-1 ${selected ? "text-primary" : "text-muted-foreground"}`} />
+      <p className="text-xs font-semibold">{title}</p>
+      <p className="text-xs text-muted-foreground">{subtitle}</p>
+    </button>
+  );
+}
+
+type PaymentMethod = "card" | "invoice";
+const PAYMENT_API: Record<PaymentMethod, string> = { card: "tarjeta", invoice: "factura" };
+const PAYMENT_LABEL: Record<PaymentMethod, string> = { card: "Tarjeta", invoice: "Factura por correo" };
+
+function nightsLabel(nights: number) {
+  return `${nights} noche${nights === 1 ? "" : "s"}`;
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+  return message || fallback;
+}
+
+function ProcessingPanel({ steps, processingStep, total, paymentMethod }: {
+  steps: string[];
+  processingStep: number;
+  total: number;
+  paymentMethod: PaymentMethod;
+}) {
+  return (
+    <div className="p-8 flex flex-col items-center text-center space-y-6">
+      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      </div>
+      <div>
+        <p className="font-semibold text-foreground mb-1">Procesando su pago</p>
+        <p className="text-sm text-muted-foreground">Por favor no cierre esta ventana</p>
+      </div>
+      <div className="w-full space-y-2">
+        {steps.map((label, i) => (
+          <ProcessingStepItem key={label} label={label} status={stepStatus(processingStep, i)} />
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">Q{total.toFixed(2)} — {PAYMENT_LABEL[paymentMethod]}</p>
     </div>
   );
 }

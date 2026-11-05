@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Users, Bed, SlidersHorizontal, Search, X } from "lucide-react";
+import { buildRoomQuery, countNights } from "@/lib/rooms";
 
 const TIPO_LABEL: Record<string, string> = { sencilla: "Sencilla", doble: "Doble", suite: "Suite", cabana: "Cabana" };
 
@@ -21,11 +22,7 @@ export default function Rooms() {
   });
   const [activeFilters, setActiveFilters] = useState({ ...filters });
 
-  const queryParams: Record<string, any> = {};
-  if (activeFilters.tipo !== "all") queryParams.tipo = activeFilters.tipo;
-  if (activeFilters.capacidad) queryParams.capacidad = parseInt(activeFilters.capacidad);
-  if (activeFilters.fechaEntrada) queryParams.fechaEntrada = activeFilters.fechaEntrada;
-  if (activeFilters.fechaSalida) queryParams.fechaSalida = activeFilters.fechaSalida;
+  const queryParams = buildRoomQuery(activeFilters);
 
   const { data: rooms, isLoading } = useListRooms(queryParams, {
     query: { queryKey: ["rooms", JSON.stringify(queryParams)] }
@@ -42,9 +39,7 @@ export default function Rooms() {
     setActiveFilters(empty);
   };
 
-  const nights = activeFilters.fechaEntrada && activeFilters.fechaSalida
-    ? Math.ceil((new Date(activeFilters.fechaSalida).getTime() - new Date(activeFilters.fechaEntrada).getTime()) / 86400000)
-    : 0;
+  const nights = countNights(activeFilters.fechaEntrada, activeFilters.fechaSalida);
 
   const hasFilters = activeFilters.tipo !== "all" || activeFilters.capacidad || activeFilters.fechaEntrada;
   const today = new Date().toISOString().split("T")[0];

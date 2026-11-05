@@ -77,6 +77,7 @@ vi.mock("@workspace/db", () => ({
 
 import reservationsRouter from "../../routes/reservations.js";
 import { signToken } from "../../middlewares/auth.js";
+import { db } from "@workspace/db";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -333,5 +334,55 @@ describe("PATCH /api/reservations/:id", () => {
       .send({});
     expect(res.status).toBe(400);
     expect(res.body.message).toContain("cancelada");
+  });
+});
+
+// ─── Validaciones de entrada (DEF-07, DEF-10) ─────────────────────────────────
+
+describe("Validaciones de entrada en reservaciones", () => {
+  beforeEach(resetChains);
+
+  it("DEF-07: 400 cuando fechaEntrada no es una fecha válida", async () => {
+    const res = await request(buildApp())
+      .post("/api/reservations")
+      .set("Authorization", `Bearer ${clientToken()}`)
+      .send({ habitacionId: "room-1", fechaEntrada: "2026-13-45", fechaSalida: "2026-12-03" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Formato de fecha inválido");
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("DEF-07: 400 cuando fechaSalida no es una fecha válida", async () => {
+    const res = await request(buildApp())
+      .post("/api/reservations")
+      .set("Authorization", `Bearer ${clientToken()}`)
+      .send({ habitacionId: "room-1", fechaEntrada: "2026-12-01", fechaSalida: "abc" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Formato de fecha inválido");
+  });
+
+  it("DEF-10: 400 cuando el admin filtra por un estado inválido", async () => {
+    const res = await request(buildApp())
+      .get("/api/reservations?estado=xyz")
+      .set("Authorization", `Bearer ${adminToken()}`);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Estado inválido");
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("DEF-10: 400 cuando el cliente filtra por un estado inválido", async () => {
+    const res = await request(buildApp())
+      .get("/api/reservations?estado=xyz")
+      .set("Authorization", `Bearer ${clientToken()}`);
+    expect(res.status).toBe(400);
+  });
+
+  it("200 cuando se filtra por estado pendiente", async () => {
+    mockSelectResult = [];
+    const res = await request(buildApp())
+      .get("/api/reservations?estado=pendiente")
+      .set("Authorization", `Bearer ${adminToken()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
   });
 });
