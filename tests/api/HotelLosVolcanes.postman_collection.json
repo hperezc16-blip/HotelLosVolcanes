@@ -1027,7 +1027,8 @@
                 "exec": [
                   "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
                   "pm.test(\"Código 409\", () => pm.response.to.have.status(409));",
-                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));"
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje de correo duplicado\", () => pm.expect(pm.response.json().message).to.eql(\"El email ya está registrado\"));"
                 ]
               }
             }
@@ -1074,7 +1075,8 @@
                 "exec": [
                   "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
                   "pm.test(\"Código 401\", () => pm.response.to.have.status(401));",
-                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));"
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje: token requerido\", () => pm.expect(pm.response.json().message).to.eql(\"Token requerido\"));"
                 ]
               }
             }
@@ -1120,6 +1122,7 @@
                 "exec": [
                   "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
                   "pm.test(\"Código 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
                   "pm.test(\"Mensaje: solo administradores\", () => pm.expect(pm.response.json().message).to.eql(\"Solo administradores\"));"
                 ]
               }
@@ -1165,6 +1168,7 @@
                 "exec": [
                   "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
                   "pm.test(\"Código 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
                   "pm.test(\"Mensaje de fechas\", () => pm.expect(pm.response.json().message).to.include(\"posterior\"));"
                 ]
               }

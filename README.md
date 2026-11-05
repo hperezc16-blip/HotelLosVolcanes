@@ -137,27 +137,32 @@ Los reportes de cobertura se generan en `artifacts/api-server/coverage/`.
 
 ## Pipeline CI/CD
 
-El pipeline de GitHub Actions se activa en cada `push` o `pull_request` a las ramas `main` y `develop`:
+El pipeline está en `.github/workflows/ci.yml` (GitHub Actions) y se activa en cada `push` o `pull_request` a `develop`, `qa` y `main`. Los jobs corren en este orden y cada uno espera a que el anterior termine bien:
 
-| Job | Trigger | Descripción |
-|---|---|---|
-| **Build & Typecheck** | push / PR | Compila el proyecto y verifica tipos TypeScript |
-| **Lint** | push / PR | Análisis estático con ESLint |
-| **Tests & Coverage** | push / PR | Ejecuta Vitest y genera reporte de cobertura |
-| **Deploy** | push a `main` | Despliega API en Railway y frontend en Vercel (requiere secrets configurados) |
+| Job | Qué hace |
+|---|---|
+| **1. build** | Instala dependencias, verifica tipos, corre ESLint y compila |
+| **2. unit-tests** | Ejecuta las pruebas unitarias con Vitest (`pnpm test:coverage`) y guarda los reportes de cobertura |
+| **3. sonarcloud** | Análisis estático en SonarCloud con verificación del quality gate |
+| **4. api-tests** | Levanta PostgreSQL y la API, carga `tests/api/db-setup.sql` y corre la colección de Postman con Newman |
+| **5. deploy** | Solo en `push` a `qa` o `main`. En `main` despliega el backend en Render con un deploy hook y verifica `/api/healthz`; el frontend lo despliega Vercel desde la rama |
 
-### Configuración de Deploy (secrets de GitHub)
+**SonarCloud en el plan gratuito:** solo analiza `main` y los pull requests que van hacia `main`. En los demás casos (push a `develop` o `qa`, PR hacia `develop` o `qa`) el job 3 muestra un aviso de que el análisis no está disponible en esa rama y el pipeline continúa.
 
-Para activar el deploy automático, agregar estos secrets en **Settings → Secrets → Actions**:
+### Cómo ejecutar el pipeline
 
-| Secret | Plataforma | Cómo obtenerlo |
-|---|---|---|
-| `RAILWAY_TOKEN` | Railway | Dashboard → Account Settings → Tokens |
-| `VERCEL_TOKEN` | Vercel | Account → Settings → Tokens |
-| `VERCEL_ORG_ID` | Vercel | `vercel whoami --token <token>` |
-| `VERCEL_PROJECT_ID` | Vercel | Proyecto → Settings → Project ID |
+1. Crear una rama desde `develop` (`feature/*`, `fix/*`, `test/*` o `ci/*`) y subir los cambios.
+2. Abrir un pull request hacia `develop`: el pipeline corre automáticamente y el resultado aparece en la pestaña **Checks** del PR.
+3. Para volver a correrlo sin cambios, abrir la ejecución en la pestaña **Actions** y usar **Re-run all jobs**.
 
-Ver [DEPLOY_SETUP.md](DEPLOY_SETUP.md) para la guía completa paso a paso.
+### Secrets de GitHub
+
+Se configuran en **Settings → Secrets and variables → Actions**:
+
+| Secret | Uso |
+|---|---|
+| `SONAR_TOKEN` | Token de SonarCloud para el job 3 |
+| `RENDER_DEPLOY_HOOK` | Deploy hook del servicio en Render para el job 5 |
 
 ## Funcionalidades del Sistema
 
@@ -175,10 +180,13 @@ Ver [DEPLOY_SETUP.md](DEPLOY_SETUP.md) para la guía completa paso a paso.
 
 ## Ramas
 
-| Rama | Propósito |
-|---|---|
-| `main` | Código en producción (estable) |
-| `develop` | Integración de nuevas funcionalidades |
+| Rama | Ambiente | Propósito |
+|---|---|---|
+| `develop` | DEV | Integración de nuevas funcionalidades y correcciones |
+| `qa` | QA | Validación antes de pasar a producción |
+| `main` | PROD | Código en producción |
+
+Los cambios entran a `develop` por pull request con revisión de otra integrante. Luego se promueven con un PR de `develop` a `qa` y otro de `qa` a `main`. Las ramas `qa` y `main` están protegidas: el merge exige una aprobación y que los jobs 1 a 4 del pipeline estén en verde.
 
 ## Autores
 
