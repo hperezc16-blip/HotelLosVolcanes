@@ -80,10 +80,10 @@ jobs:
         with:
           name: coverage
           path: artifacts
-      # El plan gratuito de SonarCloud solo analiza main y los Pull Requests.
-      # En los push a develop y qa el codigo ya fue analizado en su Pull Request.
+      # El plan gratuito de SonarCloud solo analiza main y los Pull Requests hacia main.
+      # En develop y qa (push y Pull Requests) el analisis se omite.
       - name: Analisis SonarCloud
-        if: github.event_name != 'push' || github.ref_name == 'main'
+        if: (github.event_name == 'push' && github.ref_name == 'main') || github.base_ref == 'main'
         uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -92,11 +92,11 @@ jobs:
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300
       - name: Analisis no disponible en esta rama
-        if: github.event_name == 'push' && github.ref_name != 'main'
+        if: ${{ !((github.event_name == 'push' && github.ref_name == 'main') || github.base_ref == 'main') }}
         run: |
           echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY
-          echo "- El plan gratuito solo analiza main y los Pull Requests." >> $GITHUB_STEP_SUMMARY
-          echo "- El codigo de ${{ github.ref_name }} se analizo en su Pull Request." >> $GITHUB_STEP_SUMMARY
+          echo "- El plan gratuito solo analiza main y los Pull Requests hacia main." >> $GITHUB_STEP_SUMMARY
+          echo "- El codigo se analizara cuando llegue a main." >> $GITHUB_STEP_SUMMARY
 
   # 4. Pruebas de API con Newman sobre una API levantada en el pipeline
   api-tests:
