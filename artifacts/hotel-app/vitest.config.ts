@@ -14,7 +14,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      include: ["src/lib/**", "src/hooks/use-toast.ts", "src/contexts/**"],
+      include: [
+        "src/lib/**",
+        "src/hooks/use-toast.ts",
+        "src/contexts/**",
+        "src/pages/Rooms.tsx",
+        "src/pages/RoomDetail.tsx",
+      ],
     },
   },
 });
