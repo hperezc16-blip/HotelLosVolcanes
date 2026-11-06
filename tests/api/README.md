@@ -1,6 +1,6 @@
 # Pruebas de API (E11)
 
-Colección de Postman con 24 solicitudes y 67 aserciones sobre código de respuesta, esquema JSON y contenido.
+Colección de Postman con 24 solicitudes y 71 aserciones sobre código de respuesta, esquema JSON y contenido.
 
 | Carpeta | Qué prueba |
 |---|---|
