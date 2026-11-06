@@ -1,0 +1,1260 @@
+{
+  "info": {
+    "name": "Hotel Los Volcanes - Pruebas de API (Fase 2)",
+    "description": "Pruebas de API con aserciones de código de respuesta, esquema y contenido. La carpeta 'Flujo de reservación' encadena un flujo completo de negocio: registro, login, búsqueda, reservación, pago y gestión por el administrador. Ejecutar en orden con Newman o el Collection Runner.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Flujo de reservación",
+      "item": [
+        {
+          "name": "01 Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Responde en menos de 2 segundos\", () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+                  "pm.test(\"Contenido: status ok\", () => pm.expect(pm.response.json()).to.eql({ status: \"ok\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "02 Registrar cliente nuevo",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"clienteEmail\", `qa.${Date.now()}@hotel-test.com`);",
+                  "pm.collectionVariables.set(\"clientePassword\", \"ClienteQA123!\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Esquema de respuesta de autenticación\", () => {",
+                  "  pm.response.to.have.jsonSchema({",
+                  "    type: \"object\", required: [\"token\", \"user\"],",
+                  "    properties: {",
+                  "      token: { type: \"string\" },",
+                  "      user: { type: \"object\", required: [\"id\", \"nombre\", \"email\", \"rol\", \"activo\"],",
+                  "        properties: { id: { type: \"string\" }, email: { type: \"string\" }, rol: { enum: [\"cliente\", \"admin\"] }, activo: { type: \"boolean\" } } }",
+                  "    }",
+                  "  });",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Se registra siempre con rol cliente\", () => pm.expect(body.user.rol).to.eql(\"cliente\"));",
+                  "pm.test(\"No expone el hash de la contraseña\", () => pm.expect(body.user).to.not.have.property(\"passwordHash\"));",
+                  "pm.collectionVariables.set(\"clienteId\", body.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Cliente QA\",\n  \"email\": \"{{clienteEmail}}\",\n  \"password\": \"{{clientePassword}}\",\n  \"telefono\": \"50255550000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "03 Login del cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Devuelve un JWT válido\", () => pm.expect(body.token.split(\".\")).to.have.lengthOf(3));",
+                  "pm.test(\"El JWT expira en 24 horas (RNF-03)\", () => {",
+                  "  const payload = JSON.parse(atob(body.token.split(\".\")[1].replace(/-/g, \"+\").replace(/_/g, \"/\")));",
+                  "  pm.expect(payload.exp - payload.iat).to.eql(86400);",
+                  "});",
+                  "pm.test(\"El usuario es el recién registrado\", () => pm.expect(body.user.id).to.eql(pm.collectionVariables.get(\"clienteId\")));",
+                  "pm.collectionVariables.set(\"clienteToken\", body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{clienteEmail}}\",\n  \"password\": \"{{clientePassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "04 Perfil del cliente (me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Esquema del usuario público\", () => pm.response.to.have.jsonSchema({",
+                  "  type: \"object\", required: [\"id\", \"nombre\", \"email\", \"rol\"], not: { required: [\"passwordHash\"] }",
+                  "}));",
+                  "pm.test(\"Contenido: correo del cliente\", () => pm.expect(pm.response.json().email).to.eql(pm.collectionVariables.get(\"clienteEmail\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "05 Listar habitaciones",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "const rooms = pm.response.json();",
+                  "pm.test(\"Esquema: lista de habitaciones\", () => pm.response.to.have.jsonSchema({",
+                  "  type: \"array\", minItems: 1,",
+                  "  items: { type: \"object\", required: [\"id\", \"nombre\", \"tipo\", \"precioNoche\", \"capacidad\", \"activo\"],",
+                  "    properties: { tipo: { enum: [\"sencilla\", \"doble\", \"suite\", \"cabana\"] }, capacidad: { type: \"integer\" }, activo: { const: true } } }",
+                  "}));",
+                  "pm.test(\"Solo muestra habitaciones activas\", () => pm.expect(rooms.every(r => r.activo === true)).to.be.true);",
+                  "const suite = rooms.find(r => r.tipo === \"suite\") || rooms[0];",
+                  "pm.collectionVariables.set(\"roomId\", suite.id);",
+                  "pm.collectionVariables.set(\"roomPrecio\", suite.precioNoche);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "06 Filtrar habitaciones por tipo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Todas las habitaciones son suite\", () => pm.expect(pm.response.json().every(r => r.tipo === \"suite\")).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms?tipo=suite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms"
+              ],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "suite"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "07 Detalle de la habitación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Contenido: es la habitación pedida\", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"roomId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms",
+                "{{roomId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "08 Disponibilidad por fechas",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Fechas futuras aleatorias para que la colección se pueda correr muchas veces sin choques.",
+                  "const d = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };",
+                  "const off = 400 + Math.floor(Math.random() * 3000);",
+                  "pm.collectionVariables.set(\"fechaEntrada\", d(off));",
+                  "pm.collectionVariables.set(\"fechaSalida\", d(off + 2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"La habitación elegida está disponible\", () =>",
+                  "  pm.expect(pm.response.json().map(r => r.id)).to.include(pm.collectionVariables.get(\"roomId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms?fechaEntrada={{fechaEntrada}}&fechaSalida={{fechaSalida}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms"
+              ],
+              "query": [
+                {
+                  "key": "fechaEntrada",
+                  "value": "{{fechaEntrada}}"
+                },
+                {
+                  "key": "fechaSalida",
+                  "value": "{{fechaSalida}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "09 Crear reservación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 201\", () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Esquema de la reservación\", () => pm.response.to.have.jsonSchema({",
+                  "  type: \"object\", required: [\"id\", \"clienteId\", \"habitacionId\", \"fechaEntrada\", \"fechaSalida\", \"precioTotal\", \"estado\", \"estadoPago\", \"room\", \"cliente\"],",
+                  "  properties: { estado: { enum: [\"pendiente\", \"confirmada\", \"cancelada\", \"completada\"] }, estadoPago: { enum: [\"pendiente\", \"anticipo\", \"pagado\"] } }",
+                  "}));",
+                  "pm.test(\"Queda confirmada y con pago pendiente\", () => { pm.expect(r.estado).to.eql(\"confirmada\"); pm.expect(r.estadoPago).to.eql(\"pendiente\"); });",
+                  "pm.test(\"Precio total = 2 noches x precio por noche\", () =>",
+                  "  pm.expect(Number(r.precioTotal)).to.eql(Number(pm.collectionVariables.get(\"roomPrecio\")) * 2));",
+                  "pm.test(\"Pertenece al cliente autenticado\", () => pm.expect(r.clienteId).to.eql(pm.collectionVariables.get(\"clienteId\")));",
+                  "pm.collectionVariables.set(\"reservaId\", r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habitacionId\": \"{{roomId}}\",\n  \"fechaEntrada\": \"{{fechaEntrada}}\",\n  \"fechaSalida\": \"{{fechaSalida}}\",\n  \"notas\": \"Reserva creada por Newman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10 Rechazar reservación traslapada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
+                  "pm.test(\"Código 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje de no disponible\", () => pm.expect(pm.response.json().message).to.include(\"no está disponible\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habitacionId\": \"{{roomId}}\",\n  \"fechaEntrada\": \"{{fechaEntrada}}\",\n  \"fechaSalida\": \"{{fechaSalida}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "11 La habitación ya no aparece disponible",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"La habitación reservada se excluye\", () =>",
+                  "  pm.expect(pm.response.json().map(r => r.id)).to.not.include(pm.collectionVariables.get(\"roomId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rooms?fechaEntrada={{fechaEntrada}}&fechaSalida={{fechaSalida}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rooms"
+              ],
+              "query": [
+                {
+                  "key": "fechaEntrada",
+                  "value": "{{fechaEntrada}}"
+                },
+                {
+                  "key": "fechaSalida",
+                  "value": "{{fechaSalida}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "12 Ver mis reservaciones",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test(\"Incluye la reservación creada\", () => pm.expect(list.map(r => r.id)).to.include(pm.collectionVariables.get(\"reservaId\")));",
+                  "pm.test(\"Solo muestra reservaciones propias\", () => pm.expect(list.every(r => r.clienteId === pm.collectionVariables.get(\"clienteId\"))).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "13 Pagar la reservación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Esquema del comprobante de pago\", () => pm.response.to.have.jsonSchema({",
+                  "  type: \"object\", required: [\"estadoPago\", \"codigoAutorizacion\", \"numeroFactura\", \"metodoPago\", \"fechaPago\"],",
+                  "  properties: { numeroFactura: { type: \"string\", pattern: \"^FV-[0-9]{8}$\" } }",
+                  "}));",
+                  "pm.test(\"Queda pagada\", () => pm.expect(pm.response.json().estadoPago).to.eql(\"pagado\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reservations/{{reservaId}}/pay",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations",
+                "{{reservaId}}",
+                "pay"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"metodoPago\": \"tarjeta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "14 No permitir pagar dos veces",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
+                  "pm.test(\"Código 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje: ya pagada\", () => pm.expect(pm.response.json().message).to.include(\"ya está pagada\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reservations/{{reservaId}}/pay",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations",
+                "{{reservaId}}",
+                "pay"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"metodoPago\": \"tarjeta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "15 Login del administrador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Rol administrador\", () => pm.expect(pm.response.json().user.rol).to.eql(\"admin\"));",
+                  "pm.collectionVariables.set(\"adminToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "16 Dashboard del administrador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Esquema de estadísticas\", () => pm.response.to.have.jsonSchema({",
+                  "  type: \"object\",",
+                  "  required: [\"totalReservaciones\", \"reservacionesHoy\", \"habitacionesDisponibles\", \"totalHabitaciones\", \"ingresosMes\", \"ocupacionPorcentaje\", \"reservasRecientes\"],",
+                  "  properties: { ocupacionPorcentaje: { type: \"number\", minimum: 0, maximum: 100 }, reservasRecientes: { type: \"array\", maxItems: 5 } }",
+                  "}));",
+                  "pm.test(\"Cuenta al menos la reservación creada\", () => pm.expect(pm.response.json().totalReservaciones).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "stats"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "17 Admin marca la reservación como completada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Estado completada\", () => pm.expect(pm.response.json().estado).to.eql(\"completada\"));",
+                  "pm.test(\"Conserva el pago\", () => pm.expect(pm.response.json().estadoPago).to.eql(\"pagado\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reservations/{{reservaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations",
+                "{{reservaId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"completada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "18 Reporte del administrador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Código 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Esquema del reporte\", () => pm.response.to.have.jsonSchema({",
+                  "  type: \"object\", required: [\"ingresosMensuales\", \"porTipoHabitacion\", \"pagadas\", \"pendientesPago\", \"canceladas\", \"totalIngresos\"]",
+                  "}));",
+                  "pm.test(\"Registra al menos una reservación pagada\", () => pm.expect(pm.response.json().pagadas).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "reports"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validaciones y seguridad",
+      "item": [
+        {
+          "name": "19 Login con contraseña incorrecta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
+                  "pm.test(\"Código 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje genérico (no revela si el correo existe)\", () => pm.expect(pm.response.json().message).to.eql(\"Credenciales incorrectas\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"Incorrecta999\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "20 Registro con contraseña de 7 caracteres",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
+                  "pm.test(\"Código 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje de longitud mínima\", () => pm.expect(pm.response.json().message).to.include(\"8 caracteres\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"QA\",\n  \"email\": \"corta.{{$timestamp}}@hotel-test.com\",\n  \"password\": \"1234567\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "21 Registro con correo duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
+                  "pm.test(\"Código 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje de correo duplicado\", () => pm.expect(pm.response.json().message).to.eql(\"El email ya está registrado\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"QA\",\n  \"email\": \"{{clienteEmail}}\",\n  \"password\": \"{{clientePassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "22 Reservar sin iniciar sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
+                  "pm.test(\"Código 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje: token requerido\", () => pm.expect(pm.response.json().message).to.eql(\"Token requerido\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habitacionId\": \"{{roomId}}\",\n  \"fechaEntrada\": \"{{fechaEntrada}}\",\n  \"fechaSalida\": \"{{fechaSalida}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "23 Cliente intenta entrar al panel de administración",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
+                  "pm.test(\"Código 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje: solo administradores\", () => pm.expect(pm.response.json().message).to.eql(\"Solo administradores\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "stats"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "24 Reservación con salida antes de la entrada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorSchema = { type: \"object\", required: [\"error\", \"message\"], properties: { error: { type: \"string\" }, message: { type: \"string\" } } };",
+                  "pm.test(\"Código 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Esquema de error\", () => pm.response.to.have.jsonSchema(errorSchema));",
+                  "pm.test(\"Mensaje de fechas\", () => pm.expect(pm.response.json().message).to.include(\"posterior\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reservations"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habitacionId\": \"{{roomId}}\",\n  \"fechaEntrada\": \"2030-05-10\",\n  \"fechaSalida\": \"2030-05-08\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "clienteEmail",
+      "value": ""
+    },
+    {
+      "key": "clientePassword",
+      "value": ""
+    },
+    {
+      "key": "clienteId",
+      "value": ""
+    },
+    {
+      "key": "clienteToken",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "roomId",
+      "value": ""
+    },
+    {
+      "key": "roomPrecio",
+      "value": ""
+    },
+    {
+      "key": "fechaEntrada",
+      "value": ""
+    },
+    {
+      "key": "fechaSalida",
+      "value": ""
+    },
+    {
+      "key": "reservaId",
+      "value": ""
+    }
+  ]
+}

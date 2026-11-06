@@ -1,100 +1,198 @@
 name: CI/CD Pipeline
 
+# Se ejecuta en cada push y Pull Request hacia los tres ambientes.
+# develop = DEV, qa = QA, main = PROD.
 on:
   push:
-    branches: [main, develop]
+    branches: [develop, qa, main]
   pull_request:
-    branches: [main, develop]
+    branches: [develop, qa, main]
+  workflow_dispatch:
 
 env:
   NODE_VERSION: '20'
   PNPM_VERSION: '10'
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # 1. Compilacion
   build:
-    name: Build & Typecheck
+    name: 1. build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
-
-      - name: Typecheck
+      - name: Verificacion de tipos
         run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v3
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Instalar dependencias
-        run: pnpm install --frozen-lockfile
-
       - name: Lint
         run: pnpm lint
+      - name: Compilar
+        run: pnpm build
 
-  test:
-    name: Tests & Coverage
+  # 2. Pruebas unitarias (backend y frontend) con cobertura
+  unit-tests:
+    name: 2. unit-tests
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
-
-      - name: Tests con cobertura
+      - name: Pruebas unitarias con cobertura
         run: pnpm test:coverage
-
-      - name: Subir reporte de cobertura
-        uses: actions/upload-artifact@v4
+      - name: Guardar reportes de cobertura
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: coverage-report
-          path: coverage/
+          name: coverage
+          path: |
+            artifacts/api-server/coverage/lcov.info
+            artifacts/hotel-app/coverage/lcov.info
 
-  deploy:
-    name: Deploy
-    needs: [build, lint, test]
+  # 3. Analisis estatico con SonarCloud y verificacion del quality gate
+  sonar:
+    name: 3. sonarcloud
+    needs: unit-tests
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Confirmar despliegue
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Descargar reportes de cobertura
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: coverage
+          path: artifacts
+      # El plan gratuito de SonarCloud solo analiza main y los Pull Requests hacia main.
+      # En develop y qa (push y Pull Requests) el analisis se omite.
+      - name: Analisis SonarCloud
+        if: (github.event_name == 'push' && github.ref_name == 'main') || github.base_ref == 'main'
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+      - name: Analisis no disponible en esta rama
+        if: ${{ !((github.event_name == 'push' && github.ref_name == 'main') || github.base_ref == 'main') }}
         run: |
-          echo "Rama: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Backend: Railway - despliegue automatico via webhook"
-          echo "Frontend: Vercel - despliegue automatico via webhook"
+          echo "### SonarCloud" >> $GITHUB_STEP_SUMMARY
+          echo "- El plan gratuito solo analiza main y los Pull Requests hacia main." >> $GITHUB_STEP_SUMMARY
+          echo "- El codigo se analizara cuando llegue a main." >> $GITHUB_STEP_SUMMARY
+
+  # 4. Pruebas de API con Newman sobre una API levantada en el pipeline
+  api-tests:
+    name: 4. api-tests
+    needs: sonar
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hotel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hotel
+      JWT_SECRET: ci-secret
+      NODE_ENV: production
+      PORT: '3000'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+      - name: Crear esquema y datos de prueba
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/api/db-setup.sql
+      - name: Compilar y levantar la API
+        run: |
+          pnpm --filter @workspace/api-server build
+          node artifacts/api-server/dist/index.mjs > api.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/api/healthz && exit 0
+            sleep 1
+          done
+          cat api.log
+          exit 1
+      - name: Ejecutar coleccion con Newman
+        run: |
+          npx --yes newman@6 run tests/api/HotelLosVolcanes.postman_collection.json \
+            -e tests/api/local.postman_environment.json \
+            --reporters cli,junit \
+            --reporter-junit-export newman-results.xml
+      - name: Guardar resultados de Newman
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: newman-results
+          path: |
+            newman-results.xml
+            api.log
+
+  # 5. Despliegue al ambiente correspondiente
+  deploy:
+    name: 5. deploy
+    needs: api-tests
+    if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'qa')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'produccion' || 'qa' }}
+    steps:
+      - name: Desplegar backend en Render (produccion)
+        if: github.ref_name == 'main'
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "::error::Falta el secret RENDER_DEPLOY_HOOK"
+            exit 1
+          fi
+          curl -sf -X POST "$RENDER_DEPLOY_HOOK"
+          echo "Despliegue solicitado a Render"
+      - name: Verificar el backend desplegado
+        if: github.ref_name == 'main'
+        run: |
+          sleep 60
+          for i in $(seq 1 20); do
+            curl -sf https://hotellosvolcanes.onrender.com/api/healthz && exit 0
+            sleep 15
+          done
+          exit 1
+      - name: Resumen del despliegue
+        run: |
+          echo "### Despliegue ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: Vercel despliega automaticamente la rama ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "- Backend: https://hotellosvolcanes.onrender.com/api/healthz" >> $GITHUB_STEP_SUMMARY
+          fi
