@@ -58,14 +58,14 @@ pipeline {
                     // El plan gratuito de SonarCloud solo analiza la rama main.
                     def rama = (env.GIT_BRANCH ?: '').replaceFirst(/^origin\//, '')
                     if (rama == 'main') {
-                        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-                            bat '''
-                                npx --yes @sonar/scan ^
-                                  -Dsonar.host.url=https://sonarcloud.io ^
-                                  -Dsonar.token=%SONAR_TOKEN% ^
-                                  -Dsonar.qualitygate.wait=true ^
-                                  -Dsonar.qualitygate.timeout=300
-                            '''
+                        // Servidor "SonarCloud" y scanner "Sonar Scanner 8.1" configurados en
+                        // Manage Jenkins (plugin SonarQube Scanner). withSonarQubeEnv inyecta la URL
+                        // y el token, y publica el badge del Quality Gate en la pagina del job.
+                        def scannerHome = tool 'Sonar Scanner 8.1'
+                        withSonarQubeEnv('SonarCloud') {
+                            // qualitygate.wait hace que el scanner falle si el Quality Gate no se aprueba
+                            // (no requiere webhook de SonarCloud hacia este Jenkins local).
+                            bat "\"${scannerHome}\\bin\\sonar-scanner.bat\" -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"
                         }
                     } else {
                         echo "SonarCloud (plan gratuito) solo analiza main. Rama actual: ${rama}. El quality gate se aplica al llegar a main."
