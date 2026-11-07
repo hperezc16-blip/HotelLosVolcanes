@@ -178,20 +178,32 @@ Se configuran en **Settings → Secrets and variables → Actions**:
 - Gestión de reservaciones (cambiar estado, estado de pago)
 - Calendario de ocupación (vista de 30 días)
 
-## Ramas
+## Estrategia de ramas y ambientes
 
-| Rama | Ambiente | Propósito |
+Cada ambiente se maneja con una rama. El código solo avanza hacia el siguiente ambiente mediante Pull Request.
+
+| Rama | Ambiente | Recibe cambios desde | Condición para hacer merge |
+|---|---|---|---|
+| `feature/*`, `fix/*` | Local | `develop` | — |
+| `develop` | DEV | PR desde `feature/*` o `fix/*` | Pipeline en verde + 1 aprobación |
+| `qa` | QA | PR desde `develop` | Pipeline en verde + 1 aprobación |
+| `main` | PROD | PR desde `qa` | Pipeline en verde + 1 aprobación |
+
+### Política de promoción
+
+1. Todo cambio nuevo se trabaja en una rama `feature/<descripcion>` o `fix/<descripcion>` creada desde `develop`.
+2. Al terminar se abre un PR hacia `develop`. Otra integrante del equipo revisa el código y las pruebas antes de aprobar.
+3. Cuando `develop` está estable, se abre un PR de `develop` hacia `qa` para validar en el ambiente de QA.
+4. Después de la validación en QA, se abre un PR de `qa` hacia `main` para pasar a producción.
+5. No se hace push directo a `develop`, `qa` ni `main`.
+6. Las ramas `qa` y `main` están protegidas: el merge exige una aprobación y que los jobs `1. build`, `2. unit-tests`, `3. sonarcloud` y `4. api-tests` estén en verde. Si el pipeline falla, el merge queda bloqueado.
+7. Si se encuentra un defecto en QA, se corrige en una rama `fix/*` desde `develop` y vuelve a pasar por todo el flujo.
+
+## Equipo
+
+| Integrante | Carné | Rol |
 |---|---|---|
-| `develop` | DEV | Integración de nuevas funcionalidades y correcciones |
-| `qa` | QA | Validación antes de pasar a producción |
-| `main` | PROD | Código en producción |
+| Hazel Ruvi Pérez Cárcamo | 2113727 | Ingeniera de Automatización y de Plataforma (DevOps) |
+| Madelin Juliana Robles Hernández | 225518 | Analista de Pruebas |
 
-Los cambios entran a `develop` por pull request con revisión de otra integrante. Luego se promueven con un PR de `develop` a `qa` y otro de `qa` a `main`. Las ramas `qa` y `main` están protegidas: el merge exige una aprobación y que los jobs 1 a 4 del pipeline estén en verde.
-
-## Autores
-
-- **Hazel Ruvi Pérez Cárcamo** — hperezc16@miumg.edu.gt
-- Universidad Mariano Gálvez de Guatemala — Ingeniería de Software
-##Contribuciones
-.Hazel Ruvi Pérez Cárcamo -- Desarrollo principal
-. Luis Reyes -- Módulo de calificaciones y reseñas
+Universidad Mariano Gálvez de Guatemala — Aseguramiento de la Calidad de Software, 2026.
