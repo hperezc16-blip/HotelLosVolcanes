@@ -14,7 +14,7 @@ El plan gratuito de SonarCloud solo analiza la rama `main`, así que en otras ra
 
 ## Requisitos de la máquina de Jenkins
 
-- Jenkins en Windows con los plugins sugeridos (Pipeline, Git, Credentials Binding, JUnit y Timestamper).
+- Jenkins en Windows con los plugins sugeridos (Pipeline, Git, Credentials Binding, JUnit y Timestamper) y SonarQube Scanner.
 - Node.js 20 o superior y Git en el PATH del servicio de Jenkins. pnpm, Newman y el scanner de SonarCloud se ejecutan con `npx`, no hace falta instalarlos.
 - No necesita Docker ni base de datos local. Los servicios externos son online: SonarCloud (etapa 3) y la API desplegada en Render (etapas 4 y 5).
 
@@ -22,13 +22,21 @@ El plan gratuito de SonarCloud solo analiza la rama `main`, así que en otras ra
 
 GitHub Actions levanta un PostgreSQL temporal como contenedor de servicio y prueba una API recién compilada. Jenkins en Windows no usa Docker, así que corre la misma colección contra la API de Render (`tests/api/render.postman_environment.json`). Cada corrida registra un cliente con correo único (`Date.now()`), por lo que la colección se puede repetir sin conflictos; los datos de prueba quedan en la base de producción.
 
+## SonarCloud en Jenkins
+
+La etapa 3 usa el plugin **SonarQube Scanner**, que publica el badge del Quality Gate en la página del job. Requiere, en **Manage Jenkins**:
+
+- **System → SonarQube servers:** un servidor llamado `SonarCloud`, con URL `https://sonarcloud.io` y el token de SonarCloud como credencial.
+- **Tools → SonarQube Scanner installations:** una instalación llamada `Sonar Scanner 8.1` (instalación automática).
+
+El proyecto, la organización y las rutas de cobertura se leen de `sonar-project.properties`.
+
 ## Credenciales
 
 En **Manage Jenkins → Credentials → System → Global credentials → Add Credentials**, tipo **Secret text**:
 
 | ID | Valor |
 |---|---|
-| `SONAR_TOKEN` | Token de SonarCloud (My Account → Security) |
 | `RENDER_DEPLOY_HOOK` | Render → servicio HotelLosVolcanes → Settings → Deploy Hook |
 
 ## Crear el job
