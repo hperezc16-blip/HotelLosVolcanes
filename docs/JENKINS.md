@@ -7,7 +7,7 @@ Además de GitHub Actions (`.github/workflows/ci.yml`), el proyecto tiene un pip
 | 1. build | Instala dependencias, verifica tipos, corre lint y compila | Se detiene el pipeline |
 | 2. unit-tests | Corre las pruebas unitarias con Vitest y cobertura (`pnpm test:coverage`) | Se detiene el pipeline |
 | 3. sonarcloud | Analiza el código en SonarCloud con la cobertura y espera el quality gate (`sonar.qualitygate.wait=true`) | Se detiene si el quality gate no se aprueba |
-| 4. api-tests | Recrea la base de pruebas local, levanta la API y corre la colección de Postman con Newman | Se detiene el pipeline |
+| 4. api-tests | Despierta la API desplegada en Render y corre la colección de Postman con Newman contra ella | Se detiene el pipeline |
 | 5. deploy | En `main`, solicita el despliegue del backend a Render y verifica `/api/healthz` | El pipeline queda en rojo |
 
 El plan gratuito de SonarCloud solo analiza la rama `main`, así que en otras ramas la etapa 3 deja un aviso y continúa. La etapa 5 solo corre en `main`.
@@ -16,15 +16,11 @@ El plan gratuito de SonarCloud solo analiza la rama `main`, así que en otras ra
 
 - Jenkins en Windows con los plugins sugeridos (Pipeline, Git, Credentials Binding, JUnit y Timestamper).
 - Node.js 20 o superior y Git en el PATH del servicio de Jenkins. pnpm, Newman y el scanner de SonarCloud se ejecutan con `npx`, no hace falta instalarlos.
-- PostgreSQL local con una base exclusiva para pruebas, `hotel_ci`. La etapa 4 borra y recrea sus tablas, por eso el pipeline se niega a correr si la conexión no apunta a `localhost`.
+- No necesita Docker ni base de datos local. Los servicios externos son online: SonarCloud (etapa 3) y la API desplegada en Render (etapas 4 y 5).
 
-Crear la base una sola vez:
+### Diferencia con GitHub Actions en la etapa 4
 
-```
-"C:\Program Files\PostgreSQL\18\bin\createdb.exe" -U postgres hotel_ci
-```
-
-Si PostgreSQL está en otra carpeta o versión, cambiar la variable `PSQL` del `Jenkinsfile`.
+GitHub Actions levanta un PostgreSQL temporal como contenedor de servicio y prueba una API recién compilada. Jenkins en Windows no usa Docker, así que corre la misma colección contra la API de Render (`tests/api/render.postman_environment.json`). Cada corrida registra un cliente con correo único (`Date.now()`), por lo que la colección se puede repetir sin conflictos; los datos de prueba quedan en la base de producción.
 
 ## Credenciales
 
@@ -34,7 +30,6 @@ En **Manage Jenkins → Credentials → System → Global credentials → Add Cr
 |---|---|
 | `SONAR_TOKEN` | Token de SonarCloud (My Account → Security) |
 | `RENDER_DEPLOY_HOOK` | Render → servicio HotelLosVolcanes → Settings → Deploy Hook |
-| `HOTEL_CI_DATABASE_URL` | `postgresql://postgres:<contraseña>@localhost:5432/hotel_ci` |
 
 ## Crear el job
 

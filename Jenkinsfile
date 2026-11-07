@@ -1,7 +1,8 @@
 // Pipeline de Jenkins para Hotel Los Volcanes.
 // Ejecuta las mismas etapas que .github/workflows/ci.yml, en el mismo orden:
 // 1. build, 2. unit-tests, 3. sonarcloud (con quality gate), 4. api-tests y 5. deploy.
-// Agente: Jenkins en Windows con Node.js 20, Git y PostgreSQL local (ver docs/JENKINS.md).
+// Agente: Jenkins en Windows con Node.js 20 o superior y Git, sin Docker (ver docs/JENKINS.md).
+// Los servicios externos son online: SonarCloud y la API desplegada en Render.
 
 pipeline {
     agent any
@@ -25,10 +26,8 @@ pipeline {
 
     environment {
         PNPM = 'npx --yes pnpm@10'
-        API_PORT = '3100'
-        JWT_SECRET = 'jenkins-ci-secret'
-        // Ruta a psql.exe. Cambiarla si PostgreSQL esta instalado en otra version o carpeta.
-        PSQL = 'C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe'
+        // API desplegada en Render, usada por las pruebas de Newman y la verificacion del deploy.
+        API_URL = 'https://hotellosvolcanes.onrender.com/api'
     }
 
     stages {
@@ -77,50 +76,33 @@ pipeline {
 
         stage('4. api-tests') {
             steps {
-                withCredentials([string(credentialsId: 'HOTEL_CI_DATABASE_URL', variable: 'DATABASE_URL')]) {
-                    powershell '''
-                        $ErrorActionPreference = "Stop"
-                        # Proteccion: esta etapa borra y recrea las tablas, nunca debe apuntar a produccion.
-                        if ($env:DATABASE_URL -match "neon" -or $env:DATABASE_URL -notmatch "localhost|127\\.0\\.0\\.1") {
-                            throw "HOTEL_CI_DATABASE_URL debe apuntar a la base local de pruebas (hotel_ci), no a produccion."
-                        }
-                        & $env:PSQL $env:DATABASE_URL -v ON_ERROR_STOP=1 -q -f tests/api/db-setup.sql
-                        if ($LASTEXITCODE -ne 0) { throw "No se pudo crear el esquema de prueba" }
-
-                        $env:PORT = $env:API_PORT
-                        $env:NODE_ENV = "production"
-                        $api = Start-Process node -ArgumentList "artifacts/api-server/dist/index.mjs" `
-                            -RedirectStandardOutput api.log -RedirectStandardError api-error.log -PassThru -NoNewWindow
-                        $api.Id | Out-File -Encoding ascii api.pid
-
-                        $ok = $false
-                        for ($i = 0; $i -lt 30; $i++) {
-                            try {
-                                Invoke-WebRequest -UseBasicParsing "http://localhost:$($env:API_PORT)/api/healthz" | Out-Null
-                                $ok = $true; break
-                            } catch { Start-Sleep -Seconds 1 }
-                        }
-                        if (-not $ok) { Get-Content api.log, api-error.log; throw "La API no respondio en /api/healthz" }
-                    '''
-                    bat """
-                        npx --yes newman@6 run tests/api/HotelLosVolcanes.postman_collection.json ^
-                          -e tests/api/local.postman_environment.json ^
-                          --env-var baseUrl=http://localhost:%API_PORT%/api ^
-                          --reporters cli,junit ^
-                          --reporter-junit-export newman-results.xml
-                    """
-                }
+                // Sin Docker no hay PostgreSQL de servicio como en GitHub Actions, asi que la
+                // coleccion se ejecuta contra la API desplegada en Render (online).
+                powershell '''
+                    # Render (plan gratuito) se duerme tras 15 minutos: despertarlo antes de probar.
+                    $ok = $false
+                    for ($i = 0; $i -lt 20; $i++) {
+                        try {
+                            $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 "$($env:API_URL)/healthz"
+                            Write-Output "API en linea: $($r.Content)"
+                            $ok = $true; break
+                        } catch { Start-Sleep -Seconds 10 }
+                    }
+                    if (-not $ok) { throw "La API de Render no respondio en /api/healthz" }
+                '''
+                bat """
+                    npx --yes newman@6 run tests/api/HotelLosVolcanes.postman_collection.json ^
+                      -e tests/api/render.postman_environment.json ^
+                      --env-var baseUrl=%API_URL% ^
+                      --timeout-request 60000 ^
+                      --reporters cli,junit ^
+                      --reporter-junit-export newman-results.xml
+                """
             }
             post {
                 always {
-                    powershell '''
-                        if (Test-Path api.pid) {
-                            Stop-Process -Id (Get-Content api.pid) -Force -ErrorAction SilentlyContinue
-                            Remove-Item api.pid
-                        }
-                    '''
                     junit allowEmptyResults: true, testResults: 'newman-results.xml'
-                    archiveArtifacts allowEmptyArchive: true, artifacts: 'newman-results.xml, api.log, api-error.log'
+                    archiveArtifacts allowEmptyArchive: true, artifacts: 'newman-results.xml'
                 }
             }
         }
